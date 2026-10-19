@@ -6,8 +6,7 @@ Kleine Web-App für die jährliche Wichtel-Auslosung.
   Terminen – wer in mehreren Gruppen ist, bekommt je Gruppe eine Mail. Interner Gruppenname und
   „Name in der Mail“ (Kopfzeile, `{gruppe}`, darf `{jahr}` enthalten) sind getrennt
 - **Personenliste**: jede Person einmal (Name + E-Mail), per Häkchen beliebig vielen Gruppen
-  zugeordnet; Import aus CSV/TXT mit Gruppen-Zuordnung (Doppelte werden übersprungen).
-  Je Gruppe unter **Teilnehmer** Personen aus der Liste hinzufügen oder entfernen
+  zugeordnet; Import aus CSV/TXT mit Gruppen-Zuordnung (Doppelte werden übersprungen)
 - **Haushalts-Matrix**: Wer zusammen wohnt, zieht sich nicht
 - **E-Mail-Vorlagen**: mehrere lustige Vorlagen je Zuteilung/Erinnerung, je Empfänger wird zufällig
   eine aktive gewählt; Generator für neue Vorlagen; HTML-Mails mit fettem Partnernamen.

@@ -320,13 +320,6 @@ def add_members(conn, gid, person_ids):
                             "VALUES (?, ?)", (gid, pid)).rowcount for pid in person_ids)
 
 
-def add_participant(conn, gid, name, email):
-    """Neue (oder per E-Mail gefundene) Person direkt zur Gruppe hinzufügen.
-    Gibt (neu angelegt?, zur Gruppe hinzugefügt?) zurück."""
-    person_id, created = add_person(conn, name, email)
-    return created, bool(add_members(conn, gid, [person_id]))
-
-
 def import_persons(conn, people, gids):
     """people: Liste von (name, email). Legt neue Personen an (vorhandene E-Mails und Doppelte
     werden übersprungen) und fügt alle Zeilen den Gruppen gids hinzu.
@@ -337,11 +330,6 @@ def import_persons(conn, people, gids):
         created += new
         assigned += sum(add_members(conn, gid, [person_id]) for gid in gids)
     return created, len(people) - created, assigned
-
-
-def delete_participant(conn, gid, pid):
-    """Entfernt die Person nur aus dieser Gruppe – in der Personenliste bleibt sie."""
-    conn.execute("DELETE FROM participants WHERE id = ? AND group_id = ?", (pid, gid))
 
 
 # --- Haushalte ---------------------------------------------------------------

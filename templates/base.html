@@ -16,7 +16,6 @@
   <h1>🎁 Wichteln</h1>
   <nav>
     <a href="{{ url_for('persons') }}" class="{{ 'active' if request.endpoint == 'persons' }}">Personen</a>
-    <a href="{{ url_for('participants') }}" class="{{ 'active' if request.endpoint == 'participants' }}">Teilnehmer</a>
     <a href="{{ url_for('households') }}" class="{{ 'active' if request.endpoint == 'households' }}">Haushalte</a>
     <a href="{{ url_for('mail_template') }}" class="{{ 'active' if request.endpoint == 'mail_template' }}">E-Mail-Vorlagen</a>
     <a href="{{ url_for('draw_page') }}" class="{{ 'active' if request.endpoint == 'draw_page' }}">Auslosung</a>

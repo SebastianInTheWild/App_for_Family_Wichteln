@@ -62,7 +62,7 @@ def favicon():
 @app.post("/group/select")
 def group_select():
     session["group"] = int(request.form["group"])
-    return redirect(request.form.get("next") or url_for("participants"))
+    return redirect(request.form.get("next") or url_for("persons"))
 
 
 @app.route("/groups", methods=["GET", "POST"])
@@ -166,46 +166,8 @@ def persons():
 
 
 @app.route("/")
-def participants():
-    with storage.connect() as conn:
-        members = storage.list_participants(conn, g.gid)
-        member_ids = {m["person_id"] for m in members}
-        candidates = [p for p in storage.list_persons(conn) if p["id"] not in member_ids]
-        return render_template("participants.html", people=members, candidates=candidates)
-
-
-@app.post("/participants/add")
-def participant_add():
-    name, email = request.form.get("name", "").strip(), request.form.get("email", "").strip()
-    if not name or "@" not in email:
-        flash("Bitte Name und gültige E-Mail angeben.", "error")
-        return redirect(url_for("participants"))
-    with storage.connect() as conn:
-        created, added = storage.add_participant(conn, g.gid, name, email)
-    if created:
-        flash(f"{name} angelegt und zur Gruppe hinzugefügt.", "ok")
-    elif added:
-        flash("Diese E-Mail stand schon in der Personenliste – die Person wurde hinzugefügt.", "ok")
-    else:
-        flash("Diese Person ist bereits in dieser Gruppe.", "error")
-    return redirect(url_for("participants"))
-
-
-@app.post("/participants/add_existing")
-def participant_add_existing():
-    with storage.connect() as conn:
-        count = storage.add_members(conn, g.gid, [int(x) for x in request.form.getlist("person_id")])
-    flash(f"{count} Person(en) zur Gruppe hinzugefügt." if count else "Bitte Personen auswählen.",
-          "ok" if count else "error")
-    return redirect(url_for("participants"))
-
-
-@app.post("/participants/<int:pid>/delete")
-def participant_delete(pid):
-    with storage.connect() as conn:
-        storage.delete_participant(conn, g.gid, pid)
-    flash("Aus der Gruppe entfernt (bleibt in der Personenliste).", "ok")
-    return redirect(url_for("participants"))
+def index():
+    return redirect(url_for("persons"))
 
 
 # --- Haushalts-Matrix --------------------------------------------------------
