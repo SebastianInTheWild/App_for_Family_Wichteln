@@ -6,4 +6,4 @@ COPY . .
 ENV WICHTEL_DATA_DIR=/data PYTHONDONTWRITEBYTECODE=1
 VOLUME /data
 EXPOSE 8080
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "app:app"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "-w", "1", "--timeout", "180", "app:app"]

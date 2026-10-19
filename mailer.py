@@ -6,6 +6,12 @@ from email.message import EmailMessage
 
 import storage
 
+SMTP_TIMEOUT = 15
+
+
+class MailError(Exception):
+    pass
+
 
 def render(template, **values):
     for key, value in values.items():
@@ -56,13 +62,31 @@ def send_all(conn, messages):
         return
 
     smtp_cls = smtplib.SMTP_SSL if cfg["security"] == "ssl" else smtplib.SMTP
-    with smtp_cls(cfg["host"], cfg["port"], timeout=30) as smtp:
-        if cfg["security"] == "starttls":
-            smtp.starttls()
-        if cfg["user"]:
-            smtp.login(cfg["user"], cfg["password"])
-        for msg in mails:
-            smtp.send_message(msg)
+    try:
+        # Timeout deutlich unter dem gunicorn-Timeout, damit der Fehler angezeigt wird
+        with smtp_cls(cfg["host"], cfg["port"], timeout=SMTP_TIMEOUT) as smtp:
+            if cfg["security"] == "starttls":
+                smtp.starttls()
+            if cfg["user"]:
+                smtp.login(cfg["user"], cfg["password"])
+            for msg in mails:
+                smtp.send_message(msg)
+    except (TimeoutError, smtplib.SMTPServerDisconnected) as e:
+        raise MailError(f"Keine Antwort vom Mailserver {cfg['host']}:{cfg['port']} ({e}). "
+                        "Passen Port und Verschlüsselung zusammen? "
+                        "Üblich: 587 = STARTTLS, 465 = SSL/TLS.") from e
+    except smtplib.SMTPAuthenticationError as e:
+        raise MailError(f"Anmeldung am Mailserver abgelehnt – Benutzer/Passwort prüfen ({e.smtp_code}).") from e
+
+
+def check_combination(cfg):
+    """Warnt bei typischen Fehlkombinationen von Port und Verschlüsselung."""
+    port, security = int(cfg.get("port") or 587), cfg.get("security")
+    if port == 465 and security != "ssl":
+        return "Port 465 erwartet normalerweise „SSL/TLS“ – mit dieser Einstellung hängt die Verbindung."
+    if port in (587, 25, 2525) and security == "ssl":
+        return f"Port {port} erwartet normalerweise „STARTTLS“ – mit „SSL/TLS“ hängt die Verbindung."
+    return None
 
 
 def send_test(conn, to):

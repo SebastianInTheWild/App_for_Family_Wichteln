@@ -215,6 +215,9 @@ def settings():
             if request.form["action"] == "save":
                 mailer.save_smtp_config(conn, request.form)
                 flash("SMTP-Einstellungen gespeichert.", "ok")
+                warning = mailer.check_combination(request.form)
+                if warning:
+                    flash(warning, "error")
             elif request.form["action"] == "test":
                 to = request.form.get("to", "").strip()
                 try:
