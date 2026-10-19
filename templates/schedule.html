@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 {% set kinds = {'draw': 'Auslosung', 'reminder': 'Erinnerung'} %}
-<h2>Zeitplan – {{ group.name }}</h2>
+<h2>Zeitplan</h2>
+{% include "_group_picker.html" %}
 <p class="muted">Termine werden automatisch ausgeführt (Prüfung alle 30 Sekunden, Zeitzone {{ tz }}, jetzt: {{ now|replace('T', ' ') }}).
 War der Server zum Termin aus, läuft der Termin nach dem Start nach.</p>
 

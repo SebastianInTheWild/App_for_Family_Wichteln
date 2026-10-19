@@ -43,4 +43,47 @@
     <span class="muted small-text">Schickt eine zufällige Zuteilungs-Vorlage mit Beispielnamen – so, wie sie beim Wichteln ankommt.</span>
   </form>
 </section>
+
+<section class="card" id="gruppen">
+  <h3>Gruppen</h3>
+  <p class="muted">Jede Gruppe hat eigene Haushalte, Auslosungen und Termine. Wer in mehreren Gruppen mitmacht,
+    bekommt pro Gruppe eine eigene Mail. Wer in welcher Gruppe ist, legst du unter <a href="{{ url_for('persons') }}">Personen</a> fest.</p>
+  <p class="muted small-text"><strong>Gruppenname</strong> = nur hier in der App.
+    <strong>Name in der Mail</strong> = steht im Kopf der Mail und im Platzhalter <code>{gruppe}</code>; <code>{jahr}</code> ist erlaubt.
+    Leer lassen ergibt „Wichteln {{ year }} · Gruppenname“.</p>
+
+  <table>
+    <thead><tr><th>Gruppenname</th><th>Name in der Mail</th><th>Personen</th><th>Auslosungen</th><th></th></tr></thead>
+    <tbody>
+    {% for x in groups %}
+      <tr>
+        <td><input form="g{{ x.id }}" name="name" value="{{ x.name }}" required></td>
+        <td><input form="g{{ x.id }}" name="mail_name" value="{{ x.mail_name or '' }}" placeholder="Wichteln {jahr} · {{ x.name }}">
+            <div class="muted small-text">Kopf: 🎁 {{ previews[x.id] }}</div></td>
+        <td>{{ x.people }}</td>
+        <td>{{ x.draws }}</td>
+        <td>
+          <form method="post" action="{{ url_for('groups') }}" id="g{{ x.id }}" class="row">
+            <input type="hidden" name="group_id" value="{{ x.id }}">
+            <button name="action" value="save" class="secondary small">Speichern</button>
+            {% if groups|length > 1 %}
+            <button name="action" value="delete" class="danger small" formnovalidate
+                    onclick="return confirm('Gruppe „{{ x.name }}“ mit allen Teilnahmen, Auslosungen und Terminen löschen? (Personen bleiben in der Liste)')">Löschen</button>
+            {% endif %}
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <form method="post" action="{{ url_for('groups') }}" class="stack">
+    <input type="hidden" name="action" value="add">
+    <div class="row">
+      <label>Neue Gruppe <input name="name" placeholder="Gruppenname, z. B. Familie M." required></label>
+      <label class="grow">Name in der Mail <input name="mail_name" placeholder="z. B. Weihnachtswichteln {jahr} · Familie Müller"></label>
+    </div>
+    <div><button>Gruppe anlegen</button></div>
+  </form>
+</section>
 {% endblock %}

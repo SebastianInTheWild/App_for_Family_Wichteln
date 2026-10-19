@@ -67,11 +67,12 @@ def group_select():
 
 @app.route("/groups", methods=["GET", "POST"])
 def groups():
-    with storage.connect() as conn:
-        if request.method == "POST":
-            action, name = request.form["action"], request.form.get("name", "").strip()
-            mail_name = request.form.get("mail_name", "")
-            try:
+    """Gruppenverwaltung – angezeigt als Abschnitt der Einstellungen."""
+    if request.method == "POST":
+        action, name = request.form["action"], request.form.get("name", "").strip()
+        mail_name = request.form.get("mail_name", "")
+        try:
+            with storage.connect() as conn:
                 if action == "add" and name:
                     session["group"] = storage.add_group(conn, name, mail_name)
                     flash(f"Gruppe „{name}“ angelegt und ausgewählt.", "ok")
@@ -85,12 +86,9 @@ def groups():
                         storage.delete_group(conn, int(request.form["group_id"]))
                         session.pop("group", None)
                         flash("Gruppe mit allen Teilnahmen, Auslosungen und Terminen gelöscht (Personen bleiben in der Liste).", "ok")
-            except sqlite3.IntegrityError:
-                flash("Eine Gruppe mit diesem Namen gibt es schon.", "error")
-            return redirect(url_for("groups"))
-    year = datetime.date.today().year
-    return render_template("groups.html", year=year,
-                           previews={x["id"]: mailer.mail_identity(x, year)[1] for x in g.groups})
+        except sqlite3.IntegrityError:
+            flash("Eine Gruppe mit diesem Namen gibt es schon.", "error")
+    return redirect(url_for("settings", _anchor="gruppen"))
 
 
 # --- Teilnehmer --------------------------------------------------------------
@@ -356,8 +354,10 @@ def settings():
                     flash(f"Test-E-Mail fehlgeschlagen: {e}", "error")
             return redirect(url_for("settings"))
         cfg = mailer.smtp_config(conn)
+        year = datetime.date.today().year
         return render_template("settings.html", cfg=cfg, has_password=bool(cfg.pop("password")),
-                               test_to=session.get("test_to", ""))
+                               test_to=session.get("test_to", ""), year=year,
+                               previews={x["id"]: mailer.mail_identity(x, year)[1] for x in g.groups})
 
 
 if __name__ == "__main__":

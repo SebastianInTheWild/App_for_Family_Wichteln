@@ -1,0 +1,11 @@
+{# Gruppenauswahl für Seiten, deren Inhalt von der Gruppe abhängt #}
+<form method="post" action="{{ url_for('group_select') }}" class="card row group-picker">
+  <input type="hidden" name="next" value="{{ request.path }}">
+  <label>Gruppe
+    <select name="group" onchange="this.form.submit()">
+      {% for x in groups %}<option value="{{ x.id }}" {% if x.id == group.id %}selected{% endif %}>{{ x.name }} ({{ x.people }})</option>{% endfor %}
+    </select>
+  </label>
+  <noscript><button class="secondary small">Wechseln</button></noscript>
+  <span class="muted small-text">Gruppen anlegen und benennen unter <a href="{{ url_for('settings', _anchor='gruppen') }}">Einstellungen</a>.</span>
+</form>
