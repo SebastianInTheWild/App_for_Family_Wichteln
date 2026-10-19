@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Einstellungen</h2>
+
+<section class="card">
+  <h3>SMTP-Server</h3>
+  <p class="muted">Leerer Server = Dummy-Modus (keine echten E-Mails). Das Passwort wird verschlüsselt gespeichert.</p>
+  <form method="post" class="stack">
+    <input type="hidden" name="action" value="save">
+    <label>Server <input name="host" value="{{ cfg.host }}" placeholder="smtp.example.org"></label>
+    <div class="row">
+      <label>Port <input name="port" type="number" value="{{ cfg.port }}" class="narrow"></label>
+      <label>Verschlüsselung
+        <select name="security">
+          {% for value, label in [('starttls', 'STARTTLS (meist Port 587)'), ('ssl', 'SSL/TLS (meist Port 465)'), ('none', 'Keine')] %}
+          <option value="{{ value }}" {% if cfg.security == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Benutzer <input name="user" value="{{ cfg.user }}" autocomplete="off"></label>
+    <label>Passwort
+      <input name="password" type="password" autocomplete="new-password"
+             placeholder="{{ '•••••••• (gespeichert – leer lassen zum Behalten)' if has_password else '' }}">
+    </label>
+    {% if has_password %}
+    <label class="inline"><input type="checkbox" name="clear_password" value="1"> Gespeichertes Passwort löschen</label>
+    {% endif %}
+    <label>Absender <input name="from" value="{{ cfg['from'] }}" placeholder="Wichteln &lt;wichteln@example.org&gt;"></label>
+    <div><button>Speichern</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <h3>Test-E-Mail</h3>
+  <form method="post" class="row">
+    <input type="hidden" name="action" value="test">
+    <input name="to" type="email" placeholder="Empfänger" required>
+    <button class="secondary">Test-E-Mail senden</button>
+  </form>
+</section>
+{% endblock %}

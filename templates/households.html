@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Haushalts-Matrix</h2>
+<p class="muted">Ein Haken bedeutet: Diese beiden Personen leben zusammen und ziehen sich gegenseitig nicht.</p>
+
+{% if people|length < 2 %}
+  <p class="muted">Bitte zuerst mindestens zwei Teilnehmer anlegen.</p>
+{% else %}
+<form method="post">
+  <div class="matrix-wrap">
+  <table class="matrix">
+    <thead>
+      <tr><th></th>{% for col in people %}<th class="rot"><span>{{ col.name }}</span></th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+    {% for row in people %}
+      <tr>
+        <th>{{ row.name }}</th>
+        {% for col in people %}
+          {% set a, b = [row.id, col.id]|min, [row.id, col.id]|max %}
+          <td>
+          {% if row.id == col.id %}
+            <span class="self">–</span>
+          {% else %}
+            <input type="checkbox" data-pair="{{ a }}-{{ b }}"
+                   {% if row.id < col.id %}name="pair" value="{{ a }}-{{ b }}"{% endif %}
+                   {% if (a, b) in pairs %}checked{% endif %}>
+          {% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <button>Speichern</button>
+</form>
+<script>
+  // Matrix symmetrisch halten: Haken bei (A,B) setzt auch (B,A)
+  document.querySelectorAll('.matrix input').forEach(cb => cb.addEventListener('change', () => {
+    document.querySelectorAll(`.matrix input[data-pair="${cb.dataset.pair}"]`)
+      .forEach(other => other.checked = cb.checked);
+  }));
+</script>
+{% endif %}
+{% endblock %}

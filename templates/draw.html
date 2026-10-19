@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Auslosung</h2>
+
+<form method="post" class="card">
+  <label>Jahr <input name="year" type="number" value="{{ year }}" required></label>
+  <p>{{ count }} Teilnehmer. Ausgeschlossen werden: man selbst, Personen im selben Haushalt
+     und die Paare der letzten {{ lookback }} Jahr(e).</p>
+  <div class="row">
+    <button name="action" value="check" class="secondary">Testlauf (nichts speichern)</button>
+    <button name="action" value="run"
+            onclick="return confirm('Jetzt auslosen und E-Mails an alle verschicken?')">Auslosen &amp; E-Mails senden</button>
+  </div>
+</form>
+
+<form method="post" class="card row">
+  <input type="hidden" name="action" value="lookback">
+  <label>Gleiches Paar gesperrt für die letzten
+    <input name="lookback" type="number" min="0" max="10" value="{{ lookback }}" class="narrow"> Jahr(e)
+  </label>
+  <button class="secondary">Speichern</button>
+</form>
+
+<h3>Bisherige Auslosungen</h3>
+<p class="muted">Die Paare sind verschlüsselt gespeichert und werden hier bewusst nicht angezeigt.</p>
+<table>
+  <thead><tr><th>Jahr</th><th>Paare</th><th>Erstellt</th><th></th></tr></thead>
+  <tbody>
+  {% for h in history %}
+    <tr>
+      <td>{{ h.year }}</td><td>{{ h.pairs }}</td><td>{{ h.created_at }}</td>
+      <td>
+        <form method="post" class="row">
+          <input type="hidden" name="year" value="{{ h.year }}">
+          <button name="action" value="resend" class="secondary small"
+                  onclick="return confirm('Zuteilungs-Mails {{ h.year }} erneut an alle senden?')">Erneut senden</button>
+          <button name="action" value="remind" class="secondary small"
+                  onclick="return confirm('Erinnerung {{ h.year }} jetzt an alle senden?')">Erinnerung senden</button>
+          <button name="action" value="delete" class="danger small"
+                  onclick="return confirm('Auslosung {{ h.year }} löschen?')">Löschen</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="4" class="muted">Noch keine Auslosung.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

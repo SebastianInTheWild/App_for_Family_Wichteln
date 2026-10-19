@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Teilnehmer ({{ people|length }})</h2>
+
+<form method="post" action="{{ url_for('participant_add') }}" class="row">
+  <input name="name" placeholder="Name" required>
+  <input name="email" type="email" placeholder="E-Mail" required>
+  <button>Hinzufügen</button>
+</form>
+
+<table>
+  <thead><tr><th>Name</th><th>E-Mail</th><th></th></tr></thead>
+  <tbody>
+  {% for p in people %}
+    <tr>
+      <td>{{ p.name }}</td>
+      <td>{{ p.email }}</td>
+      <td>
+        <form method="post" action="{{ url_for('participant_delete', pid=p.id) }}"
+              onsubmit="return confirm('{{ p.name }} wirklich entfernen?')">
+          <button class="danger small">Entfernen</button>
+        </form>
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="3" class="muted">Noch keine Teilnehmer eingetragen.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p class="muted">Die E-Mail-Adresse identifiziert eine Person über die Jahre – nur so greift die Vorjahressperre.</p>
+{% endblock %}

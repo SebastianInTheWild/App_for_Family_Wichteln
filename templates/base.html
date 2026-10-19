@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wichteln</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<header>
+  <h1>🎁 Wichteln</h1>
+  <nav>
+    <a href="{{ url_for('participants') }}" class="{{ 'active' if request.endpoint == 'participants' }}">Teilnehmer</a>
+    <a href="{{ url_for('households') }}" class="{{ 'active' if request.endpoint == 'households' }}">Haushalte</a>
+    <a href="{{ url_for('mail_template') }}" class="{{ 'active' if request.endpoint == 'mail_template' }}">E-Mail-Vorlage</a>
+    <a href="{{ url_for('draw_page') }}" class="{{ 'active' if request.endpoint == 'draw_page' }}">Auslosung</a>
+    <a href="{{ url_for('schedule') }}" class="{{ 'active' if request.endpoint == 'schedule' }}">Zeitplan</a>
+    <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' }}">Einstellungen</a>
+  </nav>
+</header>
+<main>
+  {% if dummy_mail %}
+  <p class="notice">Dummy-Modus: Kein SMTP-Server eingetragen – E-Mails werden nicht versendet, sondern als Dateien in <code>data/outbox</code> abgelegt. <a href="{{ url_for('settings') }}">Zu den Einstellungen</a></p>
+  {% endif %}
+  {% for category, message in get_flashed_messages(with_categories=true) %}
+  <p class="flash {{ category }}">{{ message }}</p>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

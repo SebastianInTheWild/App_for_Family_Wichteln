@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block content %}
+{% set kinds = {'draw': 'Auslosung', 'reminder': 'Erinnerung'} %}
+<h2>Zeitplan</h2>
+<p class="muted">Termine werden automatisch ausgeführt (Prüfung alle 30 Sekunden, Zeitzone {{ tz }}, jetzt: {{ now|replace('T', ' ') }}).
+War der Server zum Termin aus, läuft der Termin nach dem Start nach.</p>
+
+<section class="card">
+  <h3>Jedes Jahr</h3>
+  <p class="muted">Aus diesen Regeln wird jedes Jahr automatisch ein Termin für das laufende Jahr erzeugt.</p>
+  <form method="post" class="row" id="rule-form">
+    <input type="hidden" name="action" value="add_rule">
+    <select name="kind">
+      <option value="reminder">Erinnerung senden</option>
+      <option value="draw">Auslosen &amp; Zuteilung senden</option>
+    </select>
+    <select name="mode" id="rule-mode">
+      <option value="nth_weekday">Wochentag im Monat</option>
+      <option value="fixed_date">Festes Datum</option>
+      <option value="advent">Adventssonntag</option>
+    </select>
+    <span data-mode="nth_weekday" class="row">
+      <select name="nth">{% for k, v in nths.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select>
+      <select name="weekday">{% for w in weekdays %}<option value="{{ loop.index0 }}" {% if loop.index0 == 6 %}selected{% endif %}>{{ w }}</option>{% endfor %}</select>
+      im
+    </span>
+    <span data-mode="fixed_date" class="row">
+      <input name="day" type="number" min="1" max="31" value="1" class="narrow">.
+    </span>
+    <span data-mode="nth_weekday fixed_date">
+      <select name="month">{% for m in months %}<option value="{{ loop.index }}" {% if loop.index == 11 %}selected{% endif %}>{{ m }}</option>{% endfor %}</select>
+    </span>
+    <span data-mode="advent">
+      <select name="advent_nth">{% for n in range(1, 5) %}<option value="{{ n }}">{{ n }}. Advent</option>{% endfor %}</select>
+    </span>
+    um <input name="time" type="time" value="10:00" required>
+    <button>Anlegen</button>
+  </form>
+
+  <table>
+    <thead><tr><th>Art</th><th>Regel</th><th>Nächster Termin</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rules %}
+      <tr>
+        <td>{{ kinds[r.kind] }}</td>
+        <td>{{ r.text }}</td>
+        <td>{{ (r.next or '–')|replace('T', ' ') }}</td>
+        <td>
+          <form method="post" onsubmit="return confirm('Jährlichen Termin löschen?')">
+            <input type="hidden" name="action" value="delete_rule">
+            <input type="hidden" name="rule_id" value="{{ r.id }}">
+            <button class="danger small">Löschen</button>
+          </form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="muted">Noch keine jährlichen Termine.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h3>Einmaliger Termin</h3>
+  <form method="post" class="row">
+    <input type="hidden" name="action" value="add">
+    <select name="kind">
+      <option value="draw">Auslosen &amp; Zuteilung senden</option>
+      <option value="reminder">Erinnerung senden</option>
+    </select>
+    <label>Jahr <input name="year" type="number" value="{{ year }}" class="narrow" required></label>
+    <label>Zeitpunkt <input name="run_at" type="datetime-local" required></label>
+    <button>Anlegen</button>
+  </form>
+</section>
+
+<h3>Termine</h3>
+<table>
+  <thead><tr><th>Zeitpunkt</th><th>Art</th><th>Jahr</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for j in jobs %}
+    <tr>
+      <td>{{ j.run_at|replace('T', ' ') }}{% if j.rule_id %} <span class="muted small-text">(jährlich)</span>{% endif %}</td>
+      <td>{{ kinds[j.kind] }}</td>
+      <td>{{ j.year }}</td>
+      <td>
+        <span class="badge {{ j.status }}">{{ {'pending': 'geplant', 'running': 'läuft', 'done': 'erledigt', 'error': 'Fehler', 'skipped': 'ausgesetzt'}[j.status] }}</span>
+        {% if j.message %}<div class="muted small-text">{{ j.message }}</div>{% endif %}
+      </td>
+      <td>
+        {% if j.rule_id and j.status == 'pending' %}
+        <form method="post" onsubmit="return confirm('Diesen Termin nur für dieses Jahr aussetzen?')">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="job_id" value="{{ j.id }}">
+          <button class="secondary small">Aussetzen</button>
+        </form>
+        {% elif not j.rule_id and j.status != 'running' %}
+        <form method="post" onsubmit="return confirm('Termin löschen?')">
+          <input type="hidden" name="action" value="delete">
+          <input type="hidden" name="job_id" value="{{ j.id }}">
+          <button class="danger small">Löschen</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">Noch keine Termine.</td></tr>
+  {% endfor %}
+  </tbody>
+</table>
+<script>
+  // Nur die Felder der gewählten Regelart anzeigen
+  const mode = document.getElementById('rule-mode');
+  const sync = () => document.querySelectorAll('#rule-form [data-mode]').forEach(el =>
+    el.hidden = !el.dataset.mode.split(' ').includes(mode.value));
+  mode.addEventListener('change', sync); sync();
+</script>
+{% endblock %}

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>E-Mail-Vorlagen</h2>
+<p class="muted">Platzhalter: <code>{name}</code> (Schenker), <code>{partner}</code> (Beschenkter), <code>{jahr}</code></p>
+
+{% for t in templates %}
+<section class="card">
+  <h3>{{ t.title }}</h3>
+  <form method="post" class="stack">
+    <input type="hidden" name="which" value="{{ t.key }}">
+    <label>Betreff <input name="subject" value="{{ t.subject }}" required></label>
+    <label>Text <textarea name="body" rows="10" required>{{ t.body }}</textarea></label>
+    <div><button>Speichern</button></div>
+  </form>
+  <details>
+    <summary>Vorschau</summary>
+    <div class="preview">
+      <strong>{{ t.preview_subject }}</strong>
+      <pre>{{ t.preview_body }}</pre>
+    </div>
+  </details>
+</section>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,25 @@
+# Für Portainer: Stacks → Add stack → Repository (dieses Repo), Compose path docker-compose.yml.
+# Portainer baut das Image aus dem Dockerfile direkt auf dem Server.
+services:
+  wichteln:
+    build: .
+    image: wichteln:latest
+    container_name: wichteln
+    ports:
+      - "8090:8080"
+    volumes:
+      # Fester Host-Pfad, damit Daten (DB, Schlüssel) ein Neu-Deployen überleben
+      - /home/sebastian/docker/wichteln/data:/data
+    environment:
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}      # in Portainer als Stack-Variable setzen
+      FLASK_SECRET: ${FLASK_SECRET}          # in Portainer als Stack-Variable setzen
+      TZ: Europe/Berlin                      # Zeitzone für den Zeitplan
+      # WICHTEL_KEY: ""                      # optional; sonst wird data/secret.key erzeugt
+      # SMTP-Server wird in der Web-App unter „Einstellungen“ eingetragen.
+    networks:
+      - ProxyNetwork
+    restart: unless-stopped
+
+networks:
+  ProxyNetwork:
+    external: true
