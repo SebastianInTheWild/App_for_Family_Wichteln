@@ -2,36 +2,38 @@
 {% block content %}
 <h2>Wichtelrunden</h2>
 <p class="muted">Jede Runde hat eigene Teilnehmer, Haushalte, Auslosungen und Termine. Wer in mehreren Runden mitmacht, bekommt pro Runde eine eigene Mail.</p>
+<p class="muted small-text"><strong>Rundenname</strong> = nur hier in der App.
+<strong>Name in der Mail</strong> = steht im Kopf der Mail und im Platzhalter <code>{gruppe}</code>; <code>{jahr}</code> ist erlaubt.
+Leer lassen ergibt „Wichteln {{ year }} · Rundenname“.</p>
 
-<form method="post" class="card row">
+<form method="post" class="card stack">
   <input type="hidden" name="action" value="add">
-  <input name="name" placeholder="z. B. Familie Müller" required>
-  <button>Runde anlegen</button>
+  <div class="row">
+    <label>Rundenname <input name="name" placeholder="z. B. Familie M." required></label>
+    <label class="grow">Name in der Mail <input name="mail_name" placeholder="z. B. Weihnachtswichteln {jahr} · Familie Müller"></label>
+  </div>
+  <div><button>Runde anlegen</button></div>
 </form>
 
 <table>
-  <thead><tr><th>Name</th><th>Teilnehmer</th><th>Auslosungen</th><th></th></tr></thead>
+  <thead><tr><th>Rundenname</th><th>Name in der Mail</th><th>Teilnehmer</th><th>Auslosungen</th><th></th></tr></thead>
   <tbody>
   {% for x in groups %}
     <tr>
-      <td>
-        <form method="post" class="row">
-          <input type="hidden" name="action" value="rename">
-          <input type="hidden" name="group_id" value="{{ x.id }}">
-          <input name="name" value="{{ x.name }}" required>
-          <button class="secondary small">Umbenennen</button>
-        </form>
-      </td>
+      <td><input form="g{{ x.id }}" name="name" value="{{ x.name }}" required></td>
+      <td><input form="g{{ x.id }}" name="mail_name" value="{{ x.mail_name or '' }}" placeholder="Wichteln {jahr} · {{ x.name }}">
+          <div class="muted small-text">Kopf: 🎁 {{ previews[x.id] }}</div></td>
       <td>{{ x.people }}</td>
       <td>{{ x.draws }}</td>
       <td>
-        {% if groups|length > 1 %}
-        <form method="post" onsubmit="return confirm('Runde „{{ x.name }}“ mit allen Teilnehmern, Auslosungen und Terminen löschen?')">
-          <input type="hidden" name="action" value="delete">
+        <form method="post" id="g{{ x.id }}" class="row">
           <input type="hidden" name="group_id" value="{{ x.id }}">
-          <button class="danger small">Löschen</button>
+          <button name="action" value="save" class="secondary small">Speichern</button>
+          {% if groups|length > 1 %}
+          <button name="action" value="delete" class="danger small" formnovalidate
+                  onclick="return confirm('Runde „{{ x.name }}“ mit allen Teilnahmen, Auslosungen und Terminen löschen? (Personen bleiben in der Liste)')">Löschen</button>
+          {% endif %}
         </form>
-        {% endif %}
       </td>
     </tr>
   {% endfor %}

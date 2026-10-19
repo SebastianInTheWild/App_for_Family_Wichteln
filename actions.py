@@ -78,7 +78,7 @@ def send_for_year(conn, gid, year, kind):
     if not pairs:
         raise ActionError(f"Für {year} gibt es noch keine Auslosung.")
     templates = _require_templates(conn, kind)
-    group = storage.get_group(conn, gid)
+    gruppe, header = mailer.mail_identity(storage.get_group(conn, gid), year)
     names = {p["email"]: p["name"] for p in storage.list_participants(conn, gid)}
 
     messages, skipped = [], 0
@@ -87,8 +87,8 @@ def send_for_year(conn, gid, year, kind):
             skipped += 1  # Teilnehmer wurde inzwischen gelöscht
             continue
         values = {"name": names[giver], "partner": names[receiver], "jahr": year,
-                  "gruppe": group["name"]}
-        messages.append((giver, *mailer.compose(_rng.choice(templates), values)))
+                  "gruppe": gruppe}
+        messages.append((giver, *mailer.compose(_rng.choice(templates), values, header=header)))
 
     mailer.send_all(conn, messages)
     where = "in data/outbox abgelegt (Dummy-Modus)" if mailer.is_dummy(conn) else "versendet"
@@ -105,11 +105,11 @@ def send_test(conn, to, gid, template_id=None):
             raise ActionError("Vorlage nicht gefunden.")
     else:
         template = _rng.choice(_require_templates(conn, "mail"))
-    group = storage.get_group(conn, gid)
-    values = {"name": "Test-Wichtel", "partner": "Erika Musterfrau",
-              "jahr": datetime.date.today().year, "gruppe": group["name"]}
+    year = datetime.date.today().year
+    gruppe, header = mailer.mail_identity(storage.get_group(conn, gid), year)
+    values = {"name": "Test-Wichtel", "partner": "Erika Musterfrau", "jahr": year, "gruppe": gruppe}
     subject, text, html_body = mailer.compose(
-        template, values,
+        template, values, header=header,
         note=f"Test-E-Mail: So sieht die Vorlage „{template['title']}“ aus. "
              "Name und Partner sind Beispielwerte.")
     mailer.send_all(conn, [(to, f"[Test] {subject}", text, html_body)])

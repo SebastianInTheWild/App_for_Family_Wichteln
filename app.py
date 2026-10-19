@@ -70,24 +70,27 @@ def groups():
     with storage.connect() as conn:
         if request.method == "POST":
             action, name = request.form["action"], request.form.get("name", "").strip()
+            mail_name = request.form.get("mail_name", "")
             try:
                 if action == "add" and name:
-                    session["group"] = storage.add_group(conn, name)
+                    session["group"] = storage.add_group(conn, name, mail_name)
                     flash(f"Runde „{name}“ angelegt und ausgewählt.", "ok")
-                elif action == "rename" and name:
-                    storage.rename_group(conn, int(request.form["group_id"]), name)
-                    flash("Runde umbenannt.", "ok")
+                elif action == "save" and name:
+                    storage.update_group(conn, int(request.form["group_id"]), name, mail_name)
+                    flash("Runde gespeichert.", "ok")
                 elif action == "delete":
                     if len(g.groups) <= 1:
                         flash("Die letzte Runde kann nicht gelöscht werden.", "error")
                     else:
                         storage.delete_group(conn, int(request.form["group_id"]))
                         session.pop("group", None)
-                        flash("Runde mit allen Teilnehmern, Auslosungen und Terminen gelöscht.", "ok")
+                        flash("Runde mit allen Teilnahmen, Auslosungen und Terminen gelöscht (Personen bleiben in der Liste).", "ok")
             except sqlite3.IntegrityError:
                 flash("Eine Runde mit diesem Namen gibt es schon.", "error")
             return redirect(url_for("groups"))
-    return render_template("groups.html")
+    year = datetime.date.today().year
+    return render_template("groups.html", year=year,
+                           previews={x["id"]: mailer.mail_identity(x, year)[1] for x in g.groups})
 
 
 # --- Teilnehmer --------------------------------------------------------------
@@ -262,13 +265,14 @@ def mail_template():
                     flash(f"Test-E-Mail fehlgeschlagen: {e}", "error")
             return redirect(url_for("mail_template", _anchor=f"t{tid}"))
 
-        sample = {"name": "Anna", "partner": "Ben", "jahr": datetime.date.today().year,
-                  "gruppe": g.group["name"]}
+        year = datetime.date.today().year
+        gruppe, header = mailer.mail_identity(g.group, year)
+        sample = {"name": "Anna", "partner": "Ben", "jahr": year, "gruppe": gruppe}
         sections = []
         for kind, title in KIND_TITLES.items():
             items = []
             for t in storage.list_templates(conn, kind):
-                subject, _, html_body = mailer.compose(t, sample)
+                subject, _, html_body = mailer.compose(t, sample, header=header)
                 items.append({"t": t, "preview_subject": subject, "preview_html": html_body})
             sections.append({"kind": kind, "title": title, "entries": items,
                              "active": sum(1 for i in items if i["t"]["active"])})

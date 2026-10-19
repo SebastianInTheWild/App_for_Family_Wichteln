@@ -22,10 +22,20 @@ def render(template, **values):
     return template
 
 
-def compose(template, values, note=None):
+def mail_identity(group, year):
+    """(Wert für {gruppe}, Kopfzeile der Mail). Mit eigenem „Name in der Mail“ (darf {jahr}
+    enthalten) steht genau dieser im Kopf, sonst „Wichteln <jahr> · <Rundenname>“."""
+    custom = (group["mail_name"] or "").strip()
+    if custom:
+        text = render(custom, jahr=year)
+        return text, text
+    return group["name"], f"Wichteln {year} · {group['name']}"
+
+
+def compose(template, values, note=None, header=None):
     """Baut (Betreff, Text, HTML) aus einer Vorlage. In HTML steht {partner} fett;
     der Kopf nennt Jahr und Runde, damit man bei mehreren Runden weiß, worum es geht."""
-    header = f"Wichteln {values['jahr']} · {values['gruppe']}"
+    header = header or f"Wichteln {values['jahr']} · {values['gruppe']}"
     subject = render(template["subject"], **values)
     text = f"🎁 {header}\n\n" + (f"{note}\n\n" if note else "") + render(template["body"], **values)
     return subject, text, render_html(template["body"], values, header, note)

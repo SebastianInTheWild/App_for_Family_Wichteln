@@ -30,7 +30,8 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS groups (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     name           TEXT NOT NULL UNIQUE,
-    lookback_years INTEGER NOT NULL DEFAULT 1
+    lookback_years INTEGER NOT NULL DEFAULT 1,
+    mail_name      TEXT                    -- Anzeige in der Mail (Kopf + {gruppe}); leer = name
 );
 -- Zentrale Personenliste; die E-Mail identifiziert eine Person über Runden und Jahre
 CREATE TABLE IF NOT EXISTS persons (
@@ -162,6 +163,8 @@ def _migrate(conn):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN group_id INTEGER NOT NULL DEFAULT 1")
     if "rule_id" not in _columns(conn, "jobs"):
         conn.execute("ALTER TABLE jobs ADD COLUMN rule_id INTEGER")
+    if "mail_name" not in _columns(conn, "groups"):
+        conn.execute("ALTER TABLE groups ADD COLUMN mail_name TEXT")
 
     lookback = get_setting(conn, "lookback_years")
     if lookback is not None:
@@ -227,12 +230,14 @@ def get_group(conn, gid):
     return conn.execute("SELECT * FROM groups WHERE id = ?", (gid,)).fetchone()
 
 
-def add_group(conn, name):
-    return conn.execute("INSERT INTO groups (name) VALUES (?)", (name.strip(),)).lastrowid
+def add_group(conn, name, mail_name=""):
+    return conn.execute("INSERT INTO groups (name, mail_name) VALUES (?, ?)",
+                        (name.strip(), mail_name.strip() or None)).lastrowid
 
 
-def rename_group(conn, gid, name):
-    conn.execute("UPDATE groups SET name = ? WHERE id = ?", (name.strip(), gid))
+def update_group(conn, gid, name, mail_name):
+    conn.execute("UPDATE groups SET name = ?, mail_name = ? WHERE id = ?",
+                 (name.strip(), mail_name.strip() or None, gid))
 
 
 def set_lookback(conn, gid, years):
