@@ -38,8 +38,9 @@
   <h3>Test-E-Mail</h3>
   <form method="post" class="row">
     <input type="hidden" name="action" value="test">
-    <input name="to" type="email" placeholder="Empfänger" required>
+    <input name="to" type="email" value="{{ test_to }}" placeholder="Empfänger" required>
     <button class="secondary">Test-E-Mail senden</button>
+    <span class="muted small-text">Schickt eine zufällige Zuteilungs-Vorlage mit Beispielnamen – so, wie sie beim Wichteln ankommt.</span>
   </form>
 </section>
 {% endblock %}

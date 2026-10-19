@@ -1,12 +1,35 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Teilnehmer ({{ people|length }})</h2>
+<h2>Teilnehmer – {{ group.name }} ({{ people|length }})</h2>
 
 <form method="post" action="{{ url_for('participant_add') }}" class="row">
   <input name="name" placeholder="Name" required>
   <input name="email" type="email" placeholder="E-Mail" required>
   <button>Hinzufügen</button>
 </form>
+
+<details class="card">
+  <summary><strong>Mehrere Teilnehmer importieren (CSV/TXT oder einfügen)</strong></summary>
+  <form method="post" action="{{ url_for('participant_import') }}" enctype="multipart/form-data" class="stack">
+    <p class="muted small-text">Eine Person pro Zeile, z. B. <code>Anna;anna@example.de</code>, <code>Anna, anna@example.de</code>,
+      <code>Anna &lt;anna@example.de&gt;</code> oder nur <code>anna@example.de</code>. Kopfzeilen werden ignoriert,
+      bereits vorhandene oder doppelte Adressen übersprungen.</p>
+    <label>Datei <input type="file" name="file" accept=".csv,.txt,text/csv,text/plain"></label>
+    <label>oder Zeilen einfügen <textarea name="text" rows="6" placeholder="Anna;anna@example.de&#10;Ben &lt;ben@example.de&gt;"></textarea></label>
+    <div><button>Importieren</button></div>
+  </form>
+</details>
+
+{% if others %}
+<form method="post" action="{{ url_for('participant_copy') }}" class="row card">
+  <label>Teilnehmer übernehmen aus
+    <select name="from_group">
+      {% for x in others %}<option value="{{ x.id }}">{{ x.name }} ({{ x.people }})</option>{% endfor %}
+    </select>
+  </label>
+  <button class="secondary">Übernehmen</button>
+</form>
+{% endif %}
 
 <table>
   <thead><tr><th>Name</th><th>E-Mail</th><th></th></tr></thead>

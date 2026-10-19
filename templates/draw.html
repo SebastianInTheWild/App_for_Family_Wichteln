@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Auslosung</h2>
+<h2>Auslosung – {{ group.name }}</h2>
 
 <form method="post" class="card">
   <label>Jahr <input name="year" type="number" value="{{ year }}" required></label>

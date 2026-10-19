@@ -28,7 +28,7 @@ def materialize_rules(conn, now):
             continue
         run_at = f"{day.isoformat()}T{rule['time']}"
         if run_at >= rule["created_at"]:  # Termine vor Anlage der Regel nicht nachholen
-            storage.add_rule_job(conn, rule["id"], rule["kind"], year, run_at)
+            storage.add_rule_job(conn, rule, year, run_at)
 
 
 def run_due_jobs():
@@ -40,9 +40,10 @@ def run_due_jobs():
         try:
             with storage.connect() as conn:
                 if job["kind"] == "draw":
-                    message = actions.perform_draw(conn, job["year"])
+                    message = actions.perform_draw(conn, job["group_id"], job["year"])
                 else:
-                    message = "Erinnerung: " + actions.send_for_year(conn, job["year"], "reminder")
+                    message = "Erinnerung: " + actions.send_for_year(
+                        conn, job["group_id"], job["year"], "reminder")
             status = "done"
         except Exception as e:  # noqa: BLE001 – Fehler am Job anzeigen
             status, message = "error", str(e)

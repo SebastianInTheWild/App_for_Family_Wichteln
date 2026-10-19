@@ -2,9 +2,14 @@
 
 Kleine Web-App für die jährliche Wichtel-Auslosung.
 
-- **Teilnehmer** mit Name und E-Mail pflegen
+- **Wichtelrunden** (z. B. je Familie) mit eigenen Teilnehmern, Haushalten, Auslosungen und
+  Terminen – wer in mehreren Runden ist, bekommt je Runde eine Mail
+- **Teilnehmer** mit Name und E-Mail pflegen, Import aus CSV/TXT (Doppelte werden übersprungen),
+  Übernahme aus einer anderen Runde
 - **Haushalts-Matrix**: Wer zusammen wohnt, zieht sich nicht
-- **E-Mail-Vorlagen** für Zuteilung und Erinnerung, Platzhalter `{name}`, `{partner}`, `{jahr}`
+- **E-Mail-Vorlagen**: mehrere lustige Vorlagen je Zuteilung/Erinnerung, je Empfänger wird zufällig
+  eine aktive gewählt; Generator für neue Vorlagen; HTML-Mails mit fettem Partnernamen.
+  Platzhalter `{name}`, `{partner}`, `{jahr}`, `{gruppe}`
 - **Auslosung**: Testlauf oder echte Auslosung + E-Mail an jeden; Zuteilung erneut senden, Erinnerung sofort senden
 - **Zeitplan**: Auslosung/Versand und Erinnerungen zu festen Zeitpunkten automatisch ausführen
 - **Einstellungen**: SMTP-Server in der Web-App eintragen, Test-E-Mail senden

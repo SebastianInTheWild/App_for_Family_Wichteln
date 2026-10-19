@@ -1,24 +1,71 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>E-Mail-Vorlagen</h2>
-<p class="muted">Platzhalter: <code>{name}</code> (Schenker), <code>{partner}</code> (Beschenkter), <code>{jahr}</code></p>
+<p class="muted">Beim Versand bekommt jede Person eine <strong>zufällig gewählte aktive</strong> Vorlage.
+Platzhalter: <code>{name}</code> (Schenker), <code>{partner}</code> (Beschenkter, in der Mail fett),
+<code>{jahr}</code>, <code>{gruppe}</code> (Runde). Der Kopf der Mail nennt Jahr und Runde automatisch.</p>
 
-{% for t in templates %}
-<section class="card">
-  <h3>{{ t.title }}</h3>
-  <form method="post" class="stack">
-    <input type="hidden" name="which" value="{{ t.key }}">
-    <label>Betreff <input name="subject" value="{{ t.subject }}" required></label>
-    <label>Text <textarea name="body" rows="10" required>{{ t.body }}</textarea></label>
-    <div><button>Speichern</button></div>
+<form class="card row" onsubmit="return false">
+  <label>Test-Mails an <input type="email" id="test-to" value="{{ test_to }}" placeholder="deine@adresse.de"></label>
+</form>
+
+{% for s in sections %}
+<section>
+  <h3>{{ s.title }} <span class="muted small-text">({{ s.active }} von {{ s.entries|length }} aktiv)</span></h3>
+  {% if not s.active %}<p class="flash error">Keine aktive Vorlage – „{{ s.title }}“ kann so nicht versendet werden.</p>{% endif %}
+
+  <form method="post" class="row">
+    <input type="hidden" name="kind" value="{{ s.kind }}">
+    <button name="action" value="generate" class="secondary">🎲 Neue {{ s.title }}-Vorlage erzeugen</button>
+    <span class="muted small-text">Würfelt eine lustige Vorlage zusammen – sie startet ausgeschaltet, damit du sie erst prüfen kannst.</span>
   </form>
-  <details>
-    <summary>Vorschau</summary>
-    <div class="preview">
-      <strong>{{ t.preview_subject }}</strong>
-      <pre>{{ t.preview_body }}</pre>
-    </div>
+
+  {% for i in s.entries %}
+  <details class="card" id="t{{ i.t.id }}" {% if i.t.id == open_id %}open{% endif %}>
+    <summary>
+      <span class="badge {{ 'done' if i.t.active else '' }}">{{ 'aktiv' if i.t.active else 'aus' }}</span>
+      <strong>{{ i.t.title }}</strong> <span class="muted">– {{ i.preview_subject }}</span>
+    </summary>
+    <form method="post" class="stack">
+      <input type="hidden" name="template_id" value="{{ i.t.id }}">
+      <label>Titel (nur intern) <input name="title" value="{{ i.t.title }}" required></label>
+      <label>Betreff <input name="subject" value="{{ i.t.subject }}" required></label>
+      <label>Text <textarea name="body" rows="14" required>{{ i.t.body }}</textarea></label>
+      <label class="inline"><input type="checkbox" name="active" value="1" {% if i.t.active %}checked{% endif %}> aktiv (wird beim Versand zufällig mit ausgewählt)</label>
+      <input type="hidden" name="to" class="to-field">
+      <div class="row">
+        <button name="action" value="save">Speichern</button>
+        <button name="action" value="test" class="secondary" formnovalidate>Test senden</button>
+        <button name="action" value="delete" class="danger" formnovalidate
+                onclick="return confirm('Vorlage „{{ i.t.title }}“ löschen?')">Löschen</button>
+      </div>
+    </form>
+    <p class="muted small-text">Vorschau (gespeicherter Stand, mit Beispielnamen):</p>
+    <iframe class="mail-preview" srcdoc="{{ i.preview_html }}" title="Vorschau {{ i.t.title }}"></iframe>
+  </details>
+  {% endfor %}
+
+  <details class="card">
+    <summary><strong>+ Neue Vorlage für „{{ s.title }}“</strong></summary>
+    <form method="post" class="stack">
+      <input type="hidden" name="action" value="add">
+      <input type="hidden" name="kind" value="{{ s.kind }}">
+      <label>Titel (nur intern) <input name="title" placeholder="z. B. Weihnachtsgedicht" required></label>
+      <label>Betreff <input name="subject" required></label>
+      <label>Text <textarea name="body" rows="10" required>Hallo {name},
+
+du beschenkst dieses Jahr: {partner}
+</textarea></label>
+      <div><button>Anlegen</button></div>
+    </form>
   </details>
 </section>
 {% endfor %}
+<script>
+  // Test-Adresse oben in alle „Test senden“-Formulare übernehmen
+  const to = document.getElementById('test-to');
+  document.querySelectorAll('form').forEach(f => f.addEventListener('submit', () => {
+    f.querySelectorAll('.to-field').forEach(i => i.value = to.value);
+  }));
+</script>
 {% endblock %}

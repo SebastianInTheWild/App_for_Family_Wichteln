@@ -59,3 +59,10 @@ summary { cursor: pointer; color: var(--muted); }
 .badge.done { background: var(--ok-bg); color: var(--ok-text); }
 .badge.error { background: var(--err-bg); color: var(--err-text); }
 .badge.running { background: var(--notice-bg); }
+.group-switch { margin-left: auto; color: var(--accent-text); }
+.group-switch select { padding: 3px 6px; margin-left: 4px; }
+.group-switch a { color: var(--accent-text); text-decoration: none; padding: 4px 10px; border-radius: 6px; opacity: .85; }
+.group-switch a.active, .group-switch a:hover { background: rgba(255,255,255,.18); opacity: 1; }
+.mail-preview { width: 100%; height: 460px; border: 1px solid var(--border); border-radius: 8px; background: #faf7f2; }
+details.card > summary { list-style-position: inside; }
+details.card[open] > summary { margin-bottom: 12px; }

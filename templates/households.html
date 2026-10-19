@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Haushalts-Matrix</h2>
+<h2>Haushalts-Matrix – {{ group.name }}</h2>
 <p class="muted">Ein Haken bedeutet: Diese beiden Personen leben zusammen und ziehen sich gegenseitig nicht.</p>
 
 {% if people|length < 2 %}

@@ -1,6 +1,8 @@
 """E-Mail-Versand. SMTP-Daten kommen aus den Einstellungen in der Datenbank.
 Ohne SMTP-Server läuft der Dummy-Modus: Mails landen als .eml in data/outbox."""
 import datetime
+import html
+import re
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr, parseaddr
@@ -18,6 +20,39 @@ def render(template, **values):
     for key, value in values.items():
         template = template.replace("{" + key + "}", str(value))
     return template
+
+
+def compose(template, values, note=None):
+    """Baut (Betreff, Text, HTML) aus einer Vorlage. In HTML steht {partner} fett;
+    der Kopf nennt Jahr und Runde, damit man bei mehreren Runden weiß, worum es geht."""
+    header = f"Wichteln {values['jahr']} · {values['gruppe']}"
+    subject = render(template["subject"], **values)
+    text = f"🎁 {header}\n\n" + (f"{note}\n\n" if note else "") + render(template["body"], **values)
+    return subject, text, render_html(template["body"], values, header, note)
+
+
+def render_html(body, values, header, note=None):
+    out = html.escape(body)
+    for key, value in values.items():
+        value = html.escape(str(value))
+        if key == "partner":
+            value = f'<strong style="color:#b3261e;font-size:1.1em">{value}</strong>'
+        out = out.replace("{" + key + "}", value)
+    out = re.sub(r"(?m)^( +)", lambda m: "&nbsp;" * len(m.group(1)), out).replace("\n", "<br>\n")
+    note_html = (f'<p style="margin:0 0 16px;padding:8px 12px;background:#fff6d6;border-radius:6px;'
+                 f'font-size:14px">{html.escape(note)}</p>') if note else ""
+    return f"""<!doctype html>
+<html lang="de"><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:24px 12px;background:#faf7f2">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+       style="max-width:560px;background:#ffffff;border:1px solid #e3ddd3;border-radius:12px;overflow:hidden">
+  <tr><td style="background:#b3261e;color:#ffffff;padding:16px 24px;font:bold 18px Arial,sans-serif">🎁 {html.escape(header)}</td></tr>
+  <tr><td style="padding:24px;color:#2b2b2b;font:16px/1.6 Arial,sans-serif">{note_html}{out}</td></tr>
+</table>
+</td></tr></table>
+</body></html>
+"""
 
 
 def smtp_config(conn):
@@ -51,14 +86,15 @@ def is_dummy(conn):
 
 
 def send_all(conn, messages):
-    """messages: Liste von (to, subject, body)."""
+    """messages: Liste von (to, subject, text, html)."""
     cfg = smtp_config(conn)
     sender = sender_header(cfg)
     mails = []
-    for to, subject, body in messages:
+    for to, subject, text, html_body in messages:
         msg = EmailMessage()
         msg["From"], msg["To"], msg["Subject"] = sender, to, subject
-        msg.set_content(body)
+        msg.set_content(text)
+        msg.add_alternative(html_body, subtype="html")
         mails.append(msg)
 
     if not cfg["host"]:
@@ -96,7 +132,3 @@ def check_combination(cfg):
         return f"Port {port} erwartet normalerweise „STARTTLS“ – mit „SSL/TLS“ hängt die Verbindung."
     return None
 
-
-def send_test(conn, to):
-    send_all(conn, [(to, "Wichteln: Test-E-Mail",
-                     "Hallo,\n\ndiese Test-E-Mail zeigt, dass der Versand funktioniert.\n")])

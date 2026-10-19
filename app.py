@@ -1,16 +1,20 @@
-"""Wichtel-App: Teilnehmer, Haushalts-Matrix, E-Mail-Vorlagen, Auslosung, Zeitplan, Einstellungen."""
+"""Wichtel-App: Runden, Teilnehmer, Haushalts-Matrix, E-Mail-Vorlagen, Auslosung, Zeitplan, Einstellungen."""
 import datetime
 import hmac
 import os
 import sqlite3
 
-from flask import Flask, Response, flash, redirect, render_template, request, url_for
+from flask import (Flask, Response, flash, g, redirect, render_template, request, session,
+                   url_for)
 
+import generator
+import importer
 import mailer
 import rules
 import scheduler
 import storage
-from actions import ActionError, compute_draw, perform_draw, send_for_year
+from actions import (KIND_TITLES, ActionError, compute_draw, perform_draw, send_for_year,
+                     send_test)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET") or os.urandom(24)
@@ -30,10 +34,22 @@ def require_login():
     return Response("Login erforderlich", 401, {"WWW-Authenticate": 'Basic realm="Wichteln"'})
 
 
+@app.before_request
+def load_group():
+    """Aktuelle Runde aus der Sitzung; fehlt sie (oder wurde gelöscht), gilt die erste."""
+    if request.endpoint == "static":
+        return
+    with storage.connect() as conn:
+        g.groups = storage.list_groups(conn)
+        g.group = next((x for x in g.groups if x["id"] == session.get("group")), g.groups[0])
+        g.gid = g.group["id"]
+        g.dummy_mail = mailer.is_dummy(conn)
+
+
 @app.context_processor
 def inject_globals():
-    with storage.connect() as conn:
-        return {"dummy_mail": mailer.is_dummy(conn)}
+    return {"groups": g.get("groups", []), "group": g.get("group"),
+            "dummy_mail": g.get("dummy_mail", False)}
 
 
 @app.route("/favicon.ico")
@@ -41,12 +57,46 @@ def favicon():
     return app.send_static_file("favicon.ico")
 
 
+# --- Runden ------------------------------------------------------------------
+
+@app.post("/group/select")
+def group_select():
+    session["group"] = int(request.form["group"])
+    return redirect(request.form.get("next") or url_for("participants"))
+
+
+@app.route("/groups", methods=["GET", "POST"])
+def groups():
+    with storage.connect() as conn:
+        if request.method == "POST":
+            action, name = request.form["action"], request.form.get("name", "").strip()
+            try:
+                if action == "add" and name:
+                    session["group"] = storage.add_group(conn, name)
+                    flash(f"Runde „{name}“ angelegt und ausgewählt.", "ok")
+                elif action == "rename" and name:
+                    storage.rename_group(conn, int(request.form["group_id"]), name)
+                    flash("Runde umbenannt.", "ok")
+                elif action == "delete":
+                    if len(g.groups) <= 1:
+                        flash("Die letzte Runde kann nicht gelöscht werden.", "error")
+                    else:
+                        storage.delete_group(conn, int(request.form["group_id"]))
+                        session.pop("group", None)
+                        flash("Runde mit allen Teilnehmern, Auslosungen und Terminen gelöscht.", "ok")
+            except sqlite3.IntegrityError:
+                flash("Eine Runde mit diesem Namen gibt es schon.", "error")
+            return redirect(url_for("groups"))
+    return render_template("groups.html")
+
+
 # --- Teilnehmer --------------------------------------------------------------
 
 @app.route("/")
 def participants():
     with storage.connect() as conn:
-        return render_template("participants.html", people=storage.list_participants(conn))
+        return render_template("participants.html", people=storage.list_participants(conn, g.gid),
+                               others=[x for x in g.groups if x["id"] != g.gid and x["people"]])
 
 
 @app.post("/participants/add")
@@ -57,17 +107,44 @@ def participant_add():
         return redirect(url_for("participants"))
     try:
         with storage.connect() as conn:
-            storage.add_participant(conn, name, email)
+            storage.add_participant(conn, g.gid, name, email)
         flash(f"{name} hinzugefügt.", "ok")
     except sqlite3.IntegrityError:
-        flash("Diese E-Mail-Adresse ist bereits eingetragen.", "error")
+        flash("Diese E-Mail-Adresse ist in dieser Runde bereits eingetragen.", "error")
+    return redirect(url_for("participants"))
+
+
+@app.post("/participants/import")
+def participant_import():
+    text = request.form.get("text", "")
+    upload = request.files.get("file")
+    if upload and upload.filename:
+        text += "\n" + importer.decode(upload.read())
+    people, invalid = importer.parse(text)
+    if not people and not invalid:
+        flash("Bitte eine Datei auswählen oder Zeilen einfügen.", "error")
+        return redirect(url_for("participants"))
+    with storage.connect() as conn:
+        added, skipped = storage.import_participants(conn, g.gid, people)
+    flash(f"Import: {added} neu, {skipped} doppelt übersprungen.", "ok")
+    if invalid:
+        flash(f"{len(invalid)} Zeile(n) ohne gültige E-Mail ignoriert: "
+              + "; ".join(invalid[:5]) + (" …" if len(invalid) > 5 else ""), "error")
+    return redirect(url_for("participants"))
+
+
+@app.post("/participants/copy")
+def participant_copy():
+    with storage.connect() as conn:
+        count = storage.copy_participants(conn, int(request.form["from_group"]), g.gid)
+    flash(f"{count} Teilnehmer übernommen (bereits vorhandene E-Mails übersprungen).", "ok")
     return redirect(url_for("participants"))
 
 
 @app.post("/participants/<int:pid>/delete")
 def participant_delete(pid):
     with storage.connect() as conn:
-        storage.delete_participant(conn, pid)
+        storage.delete_participant(conn, g.gid, pid)
     flash("Teilnehmer entfernt.", "ok")
     return redirect(url_for("participants"))
 
@@ -82,39 +159,65 @@ def households():
             for field in request.form.getlist("pair"):
                 a, b = field.split("-")
                 pairs.append((int(a), int(b)))
-            storage.save_households(conn, pairs)
+            storage.save_households(conn, g.gid, pairs)
             flash("Haushalte gespeichert.", "ok")
             return redirect(url_for("households"))
         return render_template("households.html",
-                               people=storage.list_participants(conn),
-                               pairs=storage.household_pairs(conn))
+                               people=storage.list_participants(conn, g.gid),
+                               pairs=storage.household_pairs(conn, g.gid))
 
 
 # --- E-Mail-Vorlagen ---------------------------------------------------------
-
-TEMPLATES = {"mail": "Zuteilung", "reminder": "Erinnerung"}
-
 
 @app.route("/template", methods=["GET", "POST"])
 def mail_template():
     with storage.connect() as conn:
         if request.method == "POST":
-            which = request.form["which"]
-            if which in TEMPLATES:
-                storage.set_setting(conn, f"{which}_subject", request.form["subject"])
-                storage.set_setting(conn, f"{which}_body", request.form["body"])
-                flash(f"Vorlage „{TEMPLATES[which]}“ gespeichert.", "ok")
-            return redirect(url_for("mail_template"))
+            action, form = request.form["action"], request.form
+            if action == "generate" and form.get("kind") in KIND_TITLES:
+                t = generator.generate(form["kind"])
+                tid = storage.add_template(conn, form["kind"], t["title"], t["subject"], t["body"],
+                                           active=False)
+                flash(f"Neue Vorlage „{t['title']}“ erzeugt – bitte prüfen, ggf. anpassen "
+                      "und dann „aktiv“ ankreuzen.", "ok")
+                return redirect(url_for("mail_template", open=tid, _anchor=f"t{tid}"))
+            if action == "add" and form.get("kind") in KIND_TITLES:
+                tid = storage.add_template(conn, form["kind"], form["title"].strip() or "Neue Vorlage",
+                                           form["subject"], form["body"])
+                flash("Vorlage angelegt.", "ok")
+                return redirect(url_for("mail_template", _anchor=f"t{tid}"))
+            tid = int(form["template_id"])
+            if action == "save":
+                storage.update_template(conn, tid, form["title"].strip() or "Vorlage",
+                                        form["subject"], form["body"], form.get("active"))
+                flash("Vorlage gespeichert.", "ok")
+            elif action == "delete":
+                storage.delete_template(conn, tid)
+                flash("Vorlage gelöscht.", "ok")
+                return redirect(url_for("mail_template"))
+            elif action == "test":
+                to = form.get("to", "").strip()
+                session["test_to"] = to
+                try:
+                    title = send_test(conn, to, g.gid, tid)
+                    where = "in data/outbox abgelegt (Dummy-Modus)" if mailer.is_dummy(conn) else f"an {to} versendet"
+                    flash(f"Test-E-Mail „{title}“ {where}.", "ok")
+                except Exception as e:  # noqa: BLE001
+                    flash(f"Test-E-Mail fehlgeschlagen: {e}", "error")
+            return redirect(url_for("mail_template", _anchor=f"t{tid}"))
 
-        sample = {"name": "Anna", "partner": "Ben", "jahr": datetime.date.today().year}
-        templates = []
-        for key, title in TEMPLATES.items():
-            subject = storage.get_setting(conn, f"{key}_subject")
-            body = storage.get_setting(conn, f"{key}_body")
-            templates.append({"key": key, "title": title, "subject": subject, "body": body,
-                              "preview_subject": mailer.render(subject, **sample),
-                              "preview_body": mailer.render(body, **sample)})
-    return render_template("template.html", templates=templates)
+        sample = {"name": "Anna", "partner": "Ben", "jahr": datetime.date.today().year,
+                  "gruppe": g.group["name"]}
+        sections = []
+        for kind, title in KIND_TITLES.items():
+            items = []
+            for t in storage.list_templates(conn, kind):
+                subject, _, html_body = mailer.compose(t, sample)
+                items.append({"t": t, "preview_subject": subject, "preview_html": html_body})
+            sections.append({"kind": kind, "title": title, "entries": items,
+                             "active": sum(1 for i in items if i["t"]["active"])})
+    return render_template("template.html", sections=sections, test_to=session.get("test_to", ""),
+                           open_id=request.args.get("open", type=int))
 
 
 # --- Auslosung ---------------------------------------------------------------
@@ -128,21 +231,21 @@ def draw_page():
             year = int(request.form.get("year", year_default))
             try:
                 if action == "lookback":
-                    storage.set_setting(conn, "lookback_years", str(int(request.form["lookback"])))
+                    storage.set_lookback(conn, g.gid, int(request.form["lookback"]))
                     flash("Sperrzeitraum gespeichert.", "ok")
                 elif action == "delete":
-                    storage.delete_draw(conn, year)
+                    storage.delete_draw(conn, g.gid, year)
                     flash(f"Auslosung {year} gelöscht.", "ok")
                 elif action == "check":
-                    result = compute_draw(conn, year)
+                    result = compute_draw(conn, g.gid, year)
                     flash(f"Testlauf erfolgreich: Auslosung für {len(result)} Personen ist möglich "
                           "(nichts gespeichert, nichts versendet).", "ok")
                 elif action == "run":
-                    flash(perform_draw(conn, year), "ok")
+                    flash(perform_draw(conn, g.gid, year), "ok")
                 elif action == "resend":
-                    flash(f"Zuteilung {year}: " + send_for_year(conn, year, "mail"), "ok")
+                    flash(f"Zuteilung {year}: " + send_for_year(conn, g.gid, year, "mail"), "ok")
                 elif action == "remind":
-                    flash(f"Erinnerung {year}: " + send_for_year(conn, year, "reminder"), "ok")
+                    flash(f"Erinnerung {year}: " + send_for_year(conn, g.gid, year, "reminder"), "ok")
             except ActionError as e:
                 flash(str(e), "error")
             except Exception as e:  # noqa: BLE001 – z. B. SMTP-Fehler anzeigen
@@ -150,9 +253,9 @@ def draw_page():
             return redirect(url_for("draw_page"))
 
         return render_template("draw.html", year=year_default,
-                               count=len(storage.list_participants(conn)),
-                               lookback=storage.get_setting(conn, "lookback_years"),
-                               history=storage.draw_overview(conn))
+                               count=len(storage.list_participants(conn, g.gid)),
+                               lookback=g.group["lookback_years"],
+                               history=storage.draw_overview(conn, g.gid))
 
 
 # --- Zeitplan ----------------------------------------------------------------
@@ -181,29 +284,31 @@ def schedule():
                 except (KeyError, ValueError):
                     flash("Bitte die Regel vollständig ausfüllen.", "error")
                     return redirect(url_for("schedule"))
-                storage.add_rule(conn, created_at=scheduler.now_local(), **rule)
+                storage.add_rule(conn, g.gid, created_at=scheduler.now_local(), **rule)
                 scheduler.materialize_rules(conn, scheduler.now_local())
                 flash(f"Jährlicher Termin angelegt: {rules.describe(rule)}.", "ok")
             elif request.form["action"] == "delete_rule":
-                storage.delete_rule(conn, int(request.form["rule_id"]))
+                storage.delete_rule(conn, g.gid, int(request.form["rule_id"]))
                 flash("Jährlicher Termin gelöscht.", "ok")
             elif request.form["action"] == "add":
                 kind, run_at = request.form["kind"], request.form["run_at"]
                 if kind not in ("draw", "reminder") or not run_at:
                     flash("Bitte Art und Zeitpunkt angeben.", "error")
                 else:
-                    storage.add_job(conn, kind, int(request.form["year"]), run_at)
+                    storage.add_job(conn, g.gid, kind, int(request.form["year"]), run_at)
                     flash("Termin angelegt.", "ok")
             elif request.form["action"] == "delete":
-                storage.delete_job(conn, int(request.form["job_id"]))
+                storage.delete_job(conn, g.gid, int(request.form["job_id"]))
                 flash("Termin gelöscht.", "ok")
             return redirect(url_for("schedule"))
         now = scheduler.now_local()
         rule_rows = [{"id": r["id"], "kind": r["kind"], "text": rules.describe(r),
-                      "next": rules.next_occurrence(r, now)} for r in storage.list_rules(conn)]
-        return render_template("schedule.html", jobs=storage.list_jobs(conn), rules=rule_rows,
-                               year=datetime.date.today().year, now=now, tz=scheduler.TZ.key,
-                               weekdays=rules.WEEKDAYS, months=rules.MONTHS, nths=rules.NTH)
+                      "next": rules.next_occurrence(r, now)}
+                     for r in storage.list_rules(conn, g.gid)]
+        return render_template("schedule.html", jobs=storage.list_jobs(conn, g.gid),
+                               rules=rule_rows, year=datetime.date.today().year, now=now,
+                               tz=scheduler.TZ.key, weekdays=rules.WEEKDAYS,
+                               months=rules.MONTHS, nths=rules.NTH)
 
 
 # --- Einstellungen -----------------------------------------------------------
@@ -220,15 +325,17 @@ def settings():
                     flash(warning, "error")
             elif request.form["action"] == "test":
                 to = request.form.get("to", "").strip()
+                session["test_to"] = to
                 try:
-                    mailer.send_test(conn, to)
+                    title = send_test(conn, to, g.gid)
                     where = "in data/outbox abgelegt (Dummy-Modus)" if mailer.is_dummy(conn) else f"an {to} versendet"
-                    flash(f"Test-E-Mail {where}.", "ok")
+                    flash(f"Test-E-Mail (Vorlage „{title}“) {where}.", "ok")
                 except Exception as e:  # noqa: BLE001
                     flash(f"Test-E-Mail fehlgeschlagen: {e}", "error")
             return redirect(url_for("settings"))
         cfg = mailer.smtp_config(conn)
-        return render_template("settings.html", cfg=cfg, has_password=bool(cfg.pop("password")))
+        return render_template("settings.html", cfg=cfg, has_password=bool(cfg.pop("password")),
+                               test_to=session.get("test_to", ""))
 
 
 if __name__ == "__main__":
