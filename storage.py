@@ -32,13 +32,18 @@ CREATE TABLE IF NOT EXISTS groups (
     name           TEXT NOT NULL UNIQUE,
     lookback_years INTEGER NOT NULL DEFAULT 1
 );
--- E-Mail ist je Runde eindeutig; dieselbe Person kann in mehreren Runden mitmachen
+-- Zentrale Personenliste; die E-Mail identifiziert eine Person über Runden und Jahre
+CREATE TABLE IF NOT EXISTS persons (
+    id    INTEGER PRIMARY KEY AUTOINCREMENT,
+    name  TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE
+);
+-- Teilnahme einer Person an einer Runde (Haushalte verweisen auf diese ID)
 CREATE TABLE IF NOT EXISTS participants (
-    id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-    name     TEXT NOT NULL,
-    email    TEXT NOT NULL,
-    UNIQUE (group_id, email)
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    person_id INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+    UNIQUE (group_id, person_id)
 );
 -- Symmetrische Haushalts-Matrix: gespeichert wird nur (a, b) mit a < b
 CREATE TABLE IF NOT EXISTS households (
@@ -131,18 +136,24 @@ def init_db():
 
 def _migrate(conn):
     """Bringt Datenbanken älterer Versionen auf den aktuellen Stand."""
-    if "group_id" not in _columns(conn, "participants"):
-        # E-Mail war global eindeutig -> Tabelle neu aufbauen (IDs bleiben, Haushalte passen weiter)
-        conn.executescript("""
+    columns = _columns(conn, "participants")
+    if "email" in columns:
+        # Früher standen Name/E-Mail direkt bei der Teilnahme (anfangs ohne Runden).
+        # -> zentrale Personenliste (gleiche E-Mail = eine Person, erster Name gewinnt);
+        #    Teilnahme-IDs bleiben, damit die Haushalte weiter passen.
+        group = "group_id" if "group_id" in columns else "1"
+        conn.executescript(f"""
+            INSERT OR IGNORE INTO persons (name, email)
+                SELECT name, lower(email) FROM participants ORDER BY id;
             CREATE TABLE participants_new (
-                id       INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
-                name     TEXT NOT NULL,
-                email    TEXT NOT NULL,
-                UNIQUE (group_id, email)
+                id        INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+                person_id INTEGER NOT NULL REFERENCES persons(id) ON DELETE CASCADE,
+                UNIQUE (group_id, person_id)
             );
-            INSERT INTO participants_new (id, group_id, name, email)
-                SELECT id, 1, name, email FROM participants;
+            INSERT OR IGNORE INTO participants_new (id, group_id, person_id)
+                SELECT p.id, {group}, s.id FROM participants p
+                JOIN persons s ON s.email = lower(p.email) ORDER BY p.id;
             DROP TABLE participants;
             ALTER TABLE participants_new RENAME TO participants;
         """)
@@ -236,34 +247,95 @@ def delete_group(conn, gid):
 
 # --- Teilnehmer --------------------------------------------------------------
 
+def list_persons(conn):
+    """Alle Personen mit der Menge ihrer Runden (groups: set von Runden-IDs)."""
+    rows = conn.execute(
+        "SELECT s.*, group_concat(p.group_id) AS gids FROM persons s "
+        "LEFT JOIN participants p ON p.person_id = s.id "
+        "GROUP BY s.id ORDER BY s.name COLLATE NOCASE").fetchall()
+    return [{**dict(r), "groups": {int(x) for x in (r["gids"] or "").split(",") if x}}
+            for r in rows]
+
+
+def add_person(conn, name, email):
+    """Legt eine Person an oder findet sie über die E-Mail. Gibt (id, neu?) zurück."""
+    email = email.strip().lower()
+    row = conn.execute("SELECT id FROM persons WHERE email = ?", (email,)).fetchone()
+    if row:
+        return row["id"], False
+    return conn.execute("INSERT INTO persons (name, email) VALUES (?, ?)",
+                        (name.strip(), email)).lastrowid, True
+
+
+def update_person(conn, person_id, name, email):
+    """Ändert Name/E-Mail. Bei neuer E-Mail werden auch die gespeicherten Paare umgeschrieben,
+    sonst würde die Vorjahressperre die Person nicht mehr erkennen."""
+    email = email.strip().lower()
+    old = conn.execute("SELECT email FROM persons WHERE id = ?", (person_id,)).fetchone()
+    conn.execute("UPDATE persons SET name = ?, email = ? WHERE id = ?",
+                 (name.strip(), email, person_id))
+    if old and old["email"] != email:
+        f = _fernet()
+        for r in conn.execute("SELECT id, token FROM draws").fetchall():
+            pair = json.loads(f.decrypt(r["token"]))
+            if old["email"] in pair:
+                pair = [email if x == old["email"] else x for x in pair]
+                conn.execute("UPDATE draws SET token = ? WHERE id = ?",
+                             (f.encrypt(json.dumps(pair).encode()), r["id"]))
+
+
+def delete_person(conn, person_id):
+    conn.execute("DELETE FROM persons WHERE id = ?", (person_id,))  # Teilnahmen + Haushalte per CASCADE
+
+
+def set_memberships(conn, person_id, gids):
+    """Setzt die Runden einer Person auf genau gids."""
+    gids = set(gids)
+    current = {r["group_id"] for r in conn.execute(
+        "SELECT group_id FROM participants WHERE person_id = ?", (person_id,))}
+    for gid in current - gids:
+        conn.execute("DELETE FROM participants WHERE person_id = ? AND group_id = ?",
+                     (person_id, gid))
+    for gid in gids - current:
+        conn.execute("INSERT INTO participants (group_id, person_id) VALUES (?, ?)",
+                     (gid, person_id))
+
+
 def list_participants(conn, gid):
-    return conn.execute("SELECT * FROM participants WHERE group_id = ? "
-                        "ORDER BY name COLLATE NOCASE", (gid,)).fetchall()
+    """Teilnehmer einer Runde; id = Teilnahme-ID (für Haushalte), dazu Name/E-Mail der Person."""
+    return conn.execute(
+        "SELECT p.id, p.group_id, p.person_id, s.name, s.email FROM participants p "
+        "JOIN persons s ON s.id = p.person_id WHERE p.group_id = ? "
+        "ORDER BY s.name COLLATE NOCASE", (gid,)).fetchall()
+
+
+def add_members(conn, gid, person_ids):
+    """Fügt Personen der Runde hinzu; gibt die Anzahl neu hinzugefügter zurück."""
+    return sum(conn.execute("INSERT OR IGNORE INTO participants (group_id, person_id) "
+                            "VALUES (?, ?)", (gid, pid)).rowcount for pid in person_ids)
 
 
 def add_participant(conn, gid, name, email):
-    conn.execute("INSERT INTO participants (group_id, name, email) VALUES (?, ?, ?)",
-                 (gid, name.strip(), email.strip().lower()))
+    """Neue (oder per E-Mail gefundene) Person direkt zur Runde hinzufügen.
+    Gibt (neu angelegt?, zur Runde hinzugefügt?) zurück."""
+    person_id, created = add_person(conn, name, email)
+    return created, bool(add_members(conn, gid, [person_id]))
 
 
-def import_participants(conn, gid, people):
-    """people: Liste von (name, email). Gibt (neu, übersprungen) zurück; vorhandene E-Mails
-    (auch doppelte innerhalb der Liste) werden übersprungen."""
-    added = 0
+def import_persons(conn, people, gids):
+    """people: Liste von (name, email). Legt neue Personen an (vorhandene E-Mails und Doppelte
+    werden übersprungen) und fügt alle Zeilen den Runden gids hinzu.
+    Gibt (neu, übersprungen, Runden-Zuordnungen) zurück."""
+    created = assigned = 0
     for name, email in people:
-        added += conn.execute("INSERT OR IGNORE INTO participants (group_id, name, email) "
-                              "VALUES (?, ?, ?)", (gid, name.strip(), email.strip().lower())).rowcount
-    return added, len(people) - added
-
-
-def copy_participants(conn, from_gid, to_gid):
-    """Übernimmt Teilnehmer einer anderen Runde; bereits vorhandene E-Mails bleiben unverändert."""
-    return conn.execute("INSERT OR IGNORE INTO participants (group_id, name, email) "
-                        "SELECT ?, name, email FROM participants WHERE group_id = ?",
-                        (to_gid, from_gid)).rowcount
+        person_id, new = add_person(conn, name, email)
+        created += new
+        assigned += sum(add_members(conn, gid, [person_id]) for gid in gids)
+    return created, len(people) - created, assigned
 
 
 def delete_participant(conn, gid, pid):
+    """Entfernt die Person nur aus dieser Runde – in der Personenliste bleibt sie."""
     conn.execute("DELETE FROM participants WHERE id = ? AND group_id = ?", (pid, gid))
 
 

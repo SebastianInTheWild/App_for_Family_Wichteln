@@ -92,11 +92,83 @@ def groups():
 
 # --- Teilnehmer --------------------------------------------------------------
 
+def _selected_groups(form):
+    valid = {x["id"] for x in g.groups}
+    return [int(x) for x in form.getlist("groups") if int(x) in valid]
+
+
+@app.route("/persons", methods=["GET", "POST"])
+def persons():
+    if request.method == "GET":
+        with storage.connect() as conn:
+            return render_template("persons.html", people=storage.list_persons(conn))
+
+    action, form = request.form["action"], request.form
+    if action == "add":
+        name, email = form.get("name", "").strip(), form.get("email", "").strip()
+        if not name or "@" not in email:
+            flash("Bitte Name und gültige E-Mail angeben.", "error")
+            return redirect(url_for("persons"))
+        with storage.connect() as conn:
+            person_id, created = storage.add_person(conn, name, email)
+            assigned = sum(storage.add_members(conn, gid, [person_id]) for gid in _selected_groups(form))
+        if created:
+            flash(f"{name} angelegt.", "ok")
+        elif assigned:
+            flash("Diese E-Mail gibt es schon – die vorhandene Person wurde den gewählten Runden zugeordnet.", "ok")
+        else:
+            flash("Diese E-Mail gibt es schon in der Personenliste.", "error")
+
+    elif action == "save":
+        # Eine Zeile je Person: Name, E-Mail und Häkchen je Runde
+        try:
+            with storage.connect() as conn:
+                valid = {x["id"] for x in g.groups}
+                for pid in map(int, form.getlist("person_id")):
+                    name = form.get(f"name_{pid}", "").strip()
+                    email = form.get(f"email_{pid}", "").strip()
+                    if not name or "@" not in email:
+                        raise ValueError(f"Ungültiger Name oder E-Mail bei „{name or email}“.")
+                    storage.update_person(conn, pid, name, email)
+                    storage.set_memberships(conn, pid, {int(x) for x in form.getlist(f"groups_{pid}")
+                                                        if int(x) in valid})
+            flash("Personenliste gespeichert.", "ok")
+        except sqlite3.IntegrityError:
+            flash("Nicht gespeichert: Eine E-Mail-Adresse kommt doppelt vor.", "error")
+        except ValueError as e:
+            flash(f"Nicht gespeichert: {e}", "error")
+
+    elif action == "delete":
+        with storage.connect() as conn:
+            storage.delete_person(conn, int(form["delete_id"]))
+        flash("Person aus der Liste und allen Runden gelöscht.", "ok")
+
+    elif action == "import":
+        text = form.get("text", "")
+        upload = request.files.get("file")
+        if upload and upload.filename:
+            text += "\n" + importer.decode(upload.read())
+        people, invalid = importer.parse(text)
+        if not people and not invalid:
+            flash("Bitte eine Datei auswählen oder Zeilen einfügen.", "error")
+            return redirect(url_for("persons"))
+        with storage.connect() as conn:
+            created, skipped, assigned = storage.import_persons(conn, people, _selected_groups(form))
+        flash(f"Import: {created} neu, {skipped} schon vorhanden/doppelt übersprungen"
+              + (f", {assigned} Runden-Zuordnungen" if assigned else "") + ".", "ok")
+        if invalid:
+            flash(f"{len(invalid)} Zeile(n) ohne gültige E-Mail ignoriert: "
+                  + "; ".join(invalid[:5]) + (" …" if len(invalid) > 5 else ""), "error")
+    return redirect(url_for("persons"))
+
+
 @app.route("/")
 def participants():
     with storage.connect() as conn:
-        return render_template("participants.html", people=storage.list_participants(conn, g.gid),
-                               others=[x for x in g.groups if x["id"] != g.gid and x["people"]])
+        members = storage.list_participants(conn, g.gid)
+        member_ids = {m["person_id"] for m in members}
+        candidates = [p for p in storage.list_persons(conn) if p["id"] not in member_ids]
+        return render_template("participants.html", people=members, candidates=candidates)
 
 
 @app.post("/participants/add")
@@ -105,39 +177,23 @@ def participant_add():
     if not name or "@" not in email:
         flash("Bitte Name und gültige E-Mail angeben.", "error")
         return redirect(url_for("participants"))
-    try:
-        with storage.connect() as conn:
-            storage.add_participant(conn, g.gid, name, email)
-        flash(f"{name} hinzugefügt.", "ok")
-    except sqlite3.IntegrityError:
-        flash("Diese E-Mail-Adresse ist in dieser Runde bereits eingetragen.", "error")
+    with storage.connect() as conn:
+        created, added = storage.add_participant(conn, g.gid, name, email)
+    if created:
+        flash(f"{name} angelegt und zur Runde hinzugefügt.", "ok")
+    elif added:
+        flash("Diese E-Mail stand schon in der Personenliste – die Person wurde hinzugefügt.", "ok")
+    else:
+        flash("Diese Person ist bereits in dieser Runde.", "error")
     return redirect(url_for("participants"))
 
 
-@app.post("/participants/import")
-def participant_import():
-    text = request.form.get("text", "")
-    upload = request.files.get("file")
-    if upload and upload.filename:
-        text += "\n" + importer.decode(upload.read())
-    people, invalid = importer.parse(text)
-    if not people and not invalid:
-        flash("Bitte eine Datei auswählen oder Zeilen einfügen.", "error")
-        return redirect(url_for("participants"))
+@app.post("/participants/add_existing")
+def participant_add_existing():
     with storage.connect() as conn:
-        added, skipped = storage.import_participants(conn, g.gid, people)
-    flash(f"Import: {added} neu, {skipped} doppelt übersprungen.", "ok")
-    if invalid:
-        flash(f"{len(invalid)} Zeile(n) ohne gültige E-Mail ignoriert: "
-              + "; ".join(invalid[:5]) + (" …" if len(invalid) > 5 else ""), "error")
-    return redirect(url_for("participants"))
-
-
-@app.post("/participants/copy")
-def participant_copy():
-    with storage.connect() as conn:
-        count = storage.copy_participants(conn, int(request.form["from_group"]), g.gid)
-    flash(f"{count} Teilnehmer übernommen (bereits vorhandene E-Mails übersprungen).", "ok")
+        count = storage.add_members(conn, g.gid, [int(x) for x in request.form.getlist("person_id")])
+    flash(f"{count} Person(en) zur Runde hinzugefügt." if count else "Bitte Personen auswählen.",
+          "ok" if count else "error")
     return redirect(url_for("participants"))
 
 
@@ -145,7 +201,7 @@ def participant_copy():
 def participant_delete(pid):
     with storage.connect() as conn:
         storage.delete_participant(conn, g.gid, pid)
-    flash("Teilnehmer entfernt.", "ok")
+    flash("Aus der Runde entfernt (bleibt in der Personenliste).", "ok")
     return redirect(url_for("participants"))
 
 
