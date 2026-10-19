@@ -23,7 +23,7 @@ python app.py      # http://localhost:8080
 1. Stacks → Add stack → **Repository**
    - URL: `https://github.com/SebastianInTheWild/App_for_Family_Wichteln`
    - Reference: `refs/heads/main`, Compose path: `docker-compose.yml`
-2. Umgebungsvariablen `ADMIN_PASSWORD` und `FLASK_SECRET` setzen, deployen.
+2. Optional `ADMIN_PASSWORD` setzen (Browser-Login), deployen.
 3. Aufruf: `http://<server>:8090`
 
 Portainer baut das Image aus dem `Dockerfile` direkt auf dem Server.

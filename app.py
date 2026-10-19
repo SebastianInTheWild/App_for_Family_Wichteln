@@ -13,7 +13,7 @@ import storage
 from actions import ActionError, compute_draw, perform_draw, send_for_year
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", os.urandom(24))
+app.secret_key = os.environ.get("FLASK_SECRET") or os.urandom(24)
 storage.init_db()
 if os.environ.get("WICHTEL_SCHEDULER", "1") != "0":
     scheduler.start()
