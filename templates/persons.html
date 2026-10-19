@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Personen ({{ people|length }})</h2>
-<p class="muted">Jede Person gibt es einmal. Per Häkchen legst du fest, in welchen Runden sie mitwichtelt.
-Name und E-Mail gelten für alle Runden – die E-Mail erkennt die Person auch über die Jahre wieder.</p>
+<p class="muted">Jede Person gibt es einmal. Per Häkchen legst du fest, in welchen Gruppen sie mitwichtelt.
+Name und E-Mail gelten für alle Gruppen – die E-Mail erkennt die Person auch über die Jahre wieder.</p>
 
 <details class="card" {% if not people %}open{% endif %}>
   <summary><strong>+ Person anlegen</strong></summary>
@@ -12,7 +12,7 @@ Name und E-Mail gelten für alle Runden – die E-Mail erkennt die Person auch �
       <input name="name" placeholder="Name" required>
       <input name="email" type="email" placeholder="E-Mail" required>
     </div>
-    <div class="row">Runden:
+    <div class="row">Gruppen:
       {% for x in groups %}<label class="inline"><input type="checkbox" name="groups" value="{{ x.id }}" {% if x.id == group.id %}checked{% endif %}> {{ x.name }}</label>{% endfor %}
     </div>
     <div><button>Anlegen</button></div>
@@ -28,7 +28,7 @@ Name und E-Mail gelten für alle Runden – die E-Mail erkennt die Person auch �
       bereits vorhandene oder doppelte Adressen nicht neu angelegt.</p>
     <label>Datei <input type="file" name="file" accept=".csv,.txt,text/csv,text/plain"></label>
     <label>oder Zeilen einfügen <textarea name="text" rows="6" placeholder="Anna;anna@example.de&#10;Ben &lt;ben@example.de&gt;"></textarea></label>
-    <div class="row">Alle importierten Personen diesen Runden zuordnen:
+    <div class="row">Alle importierten Personen diesen Gruppen zuordnen:
       {% for x in groups %}<label class="inline"><input type="checkbox" name="groups" value="{{ x.id }}" {% if x.id == group.id %}checked{% endif %}> {{ x.name }}</label>{% endfor %}
     </div>
     <div><button>Importieren</button></div>
@@ -58,14 +58,14 @@ Name und E-Mail gelten für alle Runden – die E-Mail erkennt die Person auch �
                                   {% if x.id in p.groups %}checked{% endif %} title="{{ p.name }} in {{ x.name }}"></td>
         {% endfor %}
         <td><button name="delete_id" value="{{ p.id }}" class="danger small" formnovalidate
-                    onclick="this.form.action.value='delete'; return confirm('{{ p.name }} aus der Liste und allen Runden löschen?')">Löschen</button></td>
+                    onclick="this.form.action.value='delete'; return confirm('{{ p.name }} aus der Liste und allen Gruppen löschen?')">Löschen</button></td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
   <button>Speichern</button>
-  <span class="muted small-text">Wer aus einer Runde entfernt wird, verliert dort auch seine Haushalts-Häkchen.</span>
+  <span class="muted small-text">Wer aus einer Gruppe entfernt wird, verliert dort auch seine Haushalts-Häkchen.</span>
 </form>
 <script>
   const filter = document.getElementById('person-filter');
@@ -74,7 +74,7 @@ Name und E-Mail gelten für alle Runden – die E-Mail erkennt die Person auch �
     document.querySelectorAll('table.persons tbody tr').forEach(tr =>
       tr.hidden = q && !tr.dataset.search.includes(q));
   });
-  // „alle“: alle sichtbaren Personen der Runde an- bzw. abhaken
+  // „alle“: alle sichtbaren Personen der Gruppe an- bzw. abhaken
   document.querySelectorAll('button[data-col]').forEach(btn => btn.addEventListener('click', () => {
     const boxes = [...document.querySelectorAll(`tbody tr:not([hidden]) input[data-col="${btn.dataset.col}"]`)];
     const target = !boxes.every(b => b.checked);

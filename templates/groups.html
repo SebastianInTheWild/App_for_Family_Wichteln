@@ -1,22 +1,22 @@
 {% extends "base.html" %}
 {% block content %}
-<h2>Wichtelrunden</h2>
-<p class="muted">Jede Runde hat eigene Teilnehmer, Haushalte, Auslosungen und Termine. Wer in mehreren Runden mitmacht, bekommt pro Runde eine eigene Mail.</p>
-<p class="muted small-text"><strong>Rundenname</strong> = nur hier in der App.
+<h2>Wichtelgruppen</h2>
+<p class="muted">Jede Gruppe hat eigene Teilnehmer, Haushalte, Auslosungen und Termine. Wer in mehreren Gruppen mitmacht, bekommt pro Gruppe eine eigene Mail.</p>
+<p class="muted small-text"><strong>Gruppenname</strong> = nur hier in der App.
 <strong>Name in der Mail</strong> = steht im Kopf der Mail und im Platzhalter <code>{gruppe}</code>; <code>{jahr}</code> ist erlaubt.
-Leer lassen ergibt „Wichteln {{ year }} · Rundenname“.</p>
+Leer lassen ergibt „Wichteln {{ year }} · Gruppenname“.</p>
 
 <form method="post" class="card stack">
   <input type="hidden" name="action" value="add">
   <div class="row">
-    <label>Rundenname <input name="name" placeholder="z. B. Familie M." required></label>
+    <label>Gruppenname <input name="name" placeholder="z. B. Familie M." required></label>
     <label class="grow">Name in der Mail <input name="mail_name" placeholder="z. B. Weihnachtswichteln {jahr} · Familie Müller"></label>
   </div>
-  <div><button>Runde anlegen</button></div>
+  <div><button>Gruppe anlegen</button></div>
 </form>
 
 <table>
-  <thead><tr><th>Rundenname</th><th>Name in der Mail</th><th>Teilnehmer</th><th>Auslosungen</th><th></th></tr></thead>
+  <thead><tr><th>Gruppenname</th><th>Name in der Mail</th><th>Teilnehmer</th><th>Auslosungen</th><th></th></tr></thead>
   <tbody>
   {% for x in groups %}
     <tr>
@@ -31,7 +31,7 @@ Leer lassen ergibt „Wichteln {{ year }} · Rundenname“.</p>
           <button name="action" value="save" class="secondary small">Speichern</button>
           {% if groups|length > 1 %}
           <button name="action" value="delete" class="danger small" formnovalidate
-                  onclick="return confirm('Runde „{{ x.name }}“ mit allen Teilnahmen, Auslosungen und Terminen löschen? (Personen bleiben in der Liste)')">Löschen</button>
+                  onclick="return confirm('Gruppe „{{ x.name }}“ mit allen Teilnahmen, Auslosungen und Terminen löschen? (Personen bleiben in der Liste)')">Löschen</button>
           {% endif %}
         </form>
       </td>

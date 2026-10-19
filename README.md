@@ -2,12 +2,12 @@
 
 Kleine Web-App für die jährliche Wichtel-Auslosung.
 
-- **Wichtelrunden** (z. B. je Familie) mit eigenen Teilnehmern, Haushalten, Auslosungen und
-  Terminen – wer in mehreren Runden ist, bekommt je Runde eine Mail. Interner Rundenname und
+- **Wichtelgruppen** (z. B. je Familie) mit eigenen Teilnehmern, Haushalten, Auslosungen und
+  Terminen – wer in mehreren Gruppen ist, bekommt je Gruppe eine Mail. Interner Gruppenname und
   „Name in der Mail“ (Kopfzeile, `{gruppe}`, darf `{jahr}` enthalten) sind getrennt
-- **Personenliste**: jede Person einmal (Name + E-Mail), per Häkchen beliebig vielen Runden
-  zugeordnet; Import aus CSV/TXT mit Runden-Zuordnung (Doppelte werden übersprungen).
-  Je Runde unter **Teilnehmer** Personen aus der Liste hinzufügen oder entfernen
+- **Personenliste**: jede Person einmal (Name + E-Mail), per Häkchen beliebig vielen Gruppen
+  zugeordnet; Import aus CSV/TXT mit Gruppen-Zuordnung (Doppelte werden übersprungen).
+  Je Gruppe unter **Teilnehmer** Personen aus der Liste hinzufügen oder entfernen
 - **Haushalts-Matrix**: Wer zusammen wohnt, zieht sich nicht
 - **E-Mail-Vorlagen**: mehrere lustige Vorlagen je Zuteilung/Erinnerung, je Empfänger wird zufällig
   eine aktive gewählt; Generator für neue Vorlagen; HTML-Mails mit fettem Partnernamen.

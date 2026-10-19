@@ -1,4 +1,4 @@
-"""Wichtel-App: Runden, Teilnehmer, Haushalts-Matrix, E-Mail-Vorlagen, Auslosung, Zeitplan, Einstellungen."""
+"""Wichtel-App: Gruppen, Teilnehmer, Haushalts-Matrix, E-Mail-Vorlagen, Auslosung, Zeitplan, Einstellungen."""
 import datetime
 import hmac
 import os
@@ -36,7 +36,7 @@ def require_login():
 
 @app.before_request
 def load_group():
-    """Aktuelle Runde aus der Sitzung; fehlt sie (oder wurde gelöscht), gilt die erste."""
+    """Aktuelle Gruppe aus der Sitzung; fehlt sie (oder wurde gelöscht), gilt die erste."""
     if request.endpoint == "static":
         return
     with storage.connect() as conn:
@@ -57,7 +57,7 @@ def favicon():
     return app.send_static_file("favicon.ico")
 
 
-# --- Runden ------------------------------------------------------------------
+# --- Gruppen ------------------------------------------------------------------
 
 @app.post("/group/select")
 def group_select():
@@ -74,19 +74,19 @@ def groups():
             try:
                 if action == "add" and name:
                     session["group"] = storage.add_group(conn, name, mail_name)
-                    flash(f"Runde „{name}“ angelegt und ausgewählt.", "ok")
+                    flash(f"Gruppe „{name}“ angelegt und ausgewählt.", "ok")
                 elif action == "save" and name:
                     storage.update_group(conn, int(request.form["group_id"]), name, mail_name)
-                    flash("Runde gespeichert.", "ok")
+                    flash("Gruppe gespeichert.", "ok")
                 elif action == "delete":
                     if len(g.groups) <= 1:
-                        flash("Die letzte Runde kann nicht gelöscht werden.", "error")
+                        flash("Die letzte Gruppe kann nicht gelöscht werden.", "error")
                     else:
                         storage.delete_group(conn, int(request.form["group_id"]))
                         session.pop("group", None)
-                        flash("Runde mit allen Teilnahmen, Auslosungen und Terminen gelöscht (Personen bleiben in der Liste).", "ok")
+                        flash("Gruppe mit allen Teilnahmen, Auslosungen und Terminen gelöscht (Personen bleiben in der Liste).", "ok")
             except sqlite3.IntegrityError:
-                flash("Eine Runde mit diesem Namen gibt es schon.", "error")
+                flash("Eine Gruppe mit diesem Namen gibt es schon.", "error")
             return redirect(url_for("groups"))
     year = datetime.date.today().year
     return render_template("groups.html", year=year,
@@ -118,12 +118,12 @@ def persons():
         if created:
             flash(f"{name} angelegt.", "ok")
         elif assigned:
-            flash("Diese E-Mail gibt es schon – die vorhandene Person wurde den gewählten Runden zugeordnet.", "ok")
+            flash("Diese E-Mail gibt es schon – die vorhandene Person wurde den gewählten Gruppen zugeordnet.", "ok")
         else:
             flash("Diese E-Mail gibt es schon in der Personenliste.", "error")
 
     elif action == "save":
-        # Eine Zeile je Person: Name, E-Mail und Häkchen je Runde
+        # Eine Zeile je Person: Name, E-Mail und Häkchen je Gruppe
         try:
             with storage.connect() as conn:
                 valid = {x["id"] for x in g.groups}
@@ -144,7 +144,7 @@ def persons():
     elif action == "delete":
         with storage.connect() as conn:
             storage.delete_person(conn, int(form["delete_id"]))
-        flash("Person aus der Liste und allen Runden gelöscht.", "ok")
+        flash("Person aus der Liste und allen Gruppen gelöscht.", "ok")
 
     elif action == "import":
         text = form.get("text", "")
@@ -158,7 +158,7 @@ def persons():
         with storage.connect() as conn:
             created, skipped, assigned = storage.import_persons(conn, people, _selected_groups(form))
         flash(f"Import: {created} neu, {skipped} schon vorhanden/doppelt übersprungen"
-              + (f", {assigned} Runden-Zuordnungen" if assigned else "") + ".", "ok")
+              + (f", {assigned} Gruppen-Zuordnungen" if assigned else "") + ".", "ok")
         if invalid:
             flash(f"{len(invalid)} Zeile(n) ohne gültige E-Mail ignoriert: "
                   + "; ".join(invalid[:5]) + (" …" if len(invalid) > 5 else ""), "error")
@@ -183,11 +183,11 @@ def participant_add():
     with storage.connect() as conn:
         created, added = storage.add_participant(conn, g.gid, name, email)
     if created:
-        flash(f"{name} angelegt und zur Runde hinzugefügt.", "ok")
+        flash(f"{name} angelegt und zur Gruppe hinzugefügt.", "ok")
     elif added:
         flash("Diese E-Mail stand schon in der Personenliste – die Person wurde hinzugefügt.", "ok")
     else:
-        flash("Diese Person ist bereits in dieser Runde.", "error")
+        flash("Diese Person ist bereits in dieser Gruppe.", "error")
     return redirect(url_for("participants"))
 
 
@@ -195,7 +195,7 @@ def participant_add():
 def participant_add_existing():
     with storage.connect() as conn:
         count = storage.add_members(conn, g.gid, [int(x) for x in request.form.getlist("person_id")])
-    flash(f"{count} Person(en) zur Runde hinzugefügt." if count else "Bitte Personen auswählen.",
+    flash(f"{count} Person(en) zur Gruppe hinzugefügt." if count else "Bitte Personen auswählen.",
           "ok" if count else "error")
     return redirect(url_for("participants"))
 
@@ -204,7 +204,7 @@ def participant_add_existing():
 def participant_delete(pid):
     with storage.connect() as conn:
         storage.delete_participant(conn, g.gid, pid)
-    flash("Aus der Runde entfernt (bleibt in der Personenliste).", "ok")
+    flash("Aus der Gruppe entfernt (bleibt in der Personenliste).", "ok")
     return redirect(url_for("participants"))
 
 

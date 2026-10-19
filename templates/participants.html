@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h2>Teilnehmer – {{ group.name }} ({{ people|length }})</h2>
-<p class="muted">Wer in dieser Runde mitwichtelt. Alle Personen und ihre Runden pflegst du unter
+<p class="muted">Wer in dieser Gruppe mitwichtelt. Alle Personen und ihre Gruppen pflegst du unter
 <a href="{{ url_for('persons') }}">Personen</a>.</p>
 
 {% if candidates %}
@@ -42,13 +42,13 @@
       <td>{{ p.email }}</td>
       <td>
         <form method="post" action="{{ url_for('participant_delete', pid=p.id) }}"
-              onsubmit="return confirm('{{ p.name }} aus der Runde „{{ group.name }}“ entfernen? (bleibt in der Personenliste)')">
-          <button class="danger small">Aus Runde entfernen</button>
+              onsubmit="return confirm('{{ p.name }} aus der Gruppe „{{ group.name }}“ entfernen? (bleibt in der Personenliste)')">
+          <button class="danger small">Aus Gruppe entfernen</button>
         </form>
       </td>
     </tr>
   {% else %}
-    <tr><td colspan="3" class="muted">Noch niemand in dieser Runde.</td></tr>
+    <tr><td colspan="3" class="muted">Noch niemand in dieser Gruppe.</td></tr>
   {% endfor %}
   </tbody>
 </table>

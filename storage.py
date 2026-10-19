@@ -26,20 +26,20 @@ OLD_DEFAULTS = {
 }
 
 SCHEMA = """
--- Wichtelrunden (z. B. je Familie); alles außer Vorlagen und Einstellungen gehört zu einer Runde
+-- Wichtelgruppen (z. B. je Familie); alles außer Vorlagen und Einstellungen gehört zu einer Gruppe
 CREATE TABLE IF NOT EXISTS groups (
     id             INTEGER PRIMARY KEY AUTOINCREMENT,
     name           TEXT NOT NULL UNIQUE,
     lookback_years INTEGER NOT NULL DEFAULT 1,
     mail_name      TEXT                    -- Anzeige in der Mail (Kopf + {gruppe}); leer = name
 );
--- Zentrale Personenliste; die E-Mail identifiziert eine Person über Runden und Jahre
+-- Zentrale Personenliste; die E-Mail identifiziert eine Person über Gruppen und Jahre
 CREATE TABLE IF NOT EXISTS persons (
     id    INTEGER PRIMARY KEY AUTOINCREMENT,
     name  TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE
 );
--- Teilnahme einer Person an einer Runde (Haushalte verweisen auf diese ID)
+-- Teilnahme einer Person an einer Gruppe (Haushalte verweisen auf diese ID)
 CREATE TABLE IF NOT EXISTS participants (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
     group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
@@ -139,7 +139,7 @@ def _migrate(conn):
     """Bringt Datenbanken älterer Versionen auf den aktuellen Stand."""
     columns = _columns(conn, "participants")
     if "email" in columns:
-        # Früher standen Name/E-Mail direkt bei der Teilnahme (anfangs ohne Runden).
+        # Früher standen Name/E-Mail direkt bei der Teilnahme (anfangs ohne Gruppen).
         # -> zentrale Personenliste (gleiche E-Mail = eine Person, erster Name gewinnt);
         #    Teilnahme-IDs bleiben, damit die Haushalte weiter passen.
         group = "group_id" if "group_id" in columns else "1"
@@ -217,7 +217,7 @@ def decrypt_text(token):
     return _fernet().decrypt(token.encode()).decode()
 
 
-# --- Runden ------------------------------------------------------------------
+# --- Gruppen ------------------------------------------------------------------
 
 def list_groups(conn):
     return conn.execute(
@@ -253,7 +253,7 @@ def delete_group(conn, gid):
 # --- Teilnehmer --------------------------------------------------------------
 
 def list_persons(conn):
-    """Alle Personen mit der Menge ihrer Runden (groups: set von Runden-IDs)."""
+    """Alle Personen mit der Menge ihrer Gruppen (groups: set von Gruppen-IDs)."""
     rows = conn.execute(
         "SELECT s.*, group_concat(p.group_id) AS gids FROM persons s "
         "LEFT JOIN participants p ON p.person_id = s.id "
@@ -294,7 +294,7 @@ def delete_person(conn, person_id):
 
 
 def set_memberships(conn, person_id, gids):
-    """Setzt die Runden einer Person auf genau gids."""
+    """Setzt die Gruppen einer Person auf genau gids."""
     gids = set(gids)
     current = {r["group_id"] for r in conn.execute(
         "SELECT group_id FROM participants WHERE person_id = ?", (person_id,))}
@@ -307,7 +307,7 @@ def set_memberships(conn, person_id, gids):
 
 
 def list_participants(conn, gid):
-    """Teilnehmer einer Runde; id = Teilnahme-ID (für Haushalte), dazu Name/E-Mail der Person."""
+    """Teilnehmer einer Gruppe; id = Teilnahme-ID (für Haushalte), dazu Name/E-Mail der Person."""
     return conn.execute(
         "SELECT p.id, p.group_id, p.person_id, s.name, s.email FROM participants p "
         "JOIN persons s ON s.id = p.person_id WHERE p.group_id = ? "
@@ -315,22 +315,22 @@ def list_participants(conn, gid):
 
 
 def add_members(conn, gid, person_ids):
-    """Fügt Personen der Runde hinzu; gibt die Anzahl neu hinzugefügter zurück."""
+    """Fügt Personen der Gruppe hinzu; gibt die Anzahl neu hinzugefügter zurück."""
     return sum(conn.execute("INSERT OR IGNORE INTO participants (group_id, person_id) "
                             "VALUES (?, ?)", (gid, pid)).rowcount for pid in person_ids)
 
 
 def add_participant(conn, gid, name, email):
-    """Neue (oder per E-Mail gefundene) Person direkt zur Runde hinzufügen.
-    Gibt (neu angelegt?, zur Runde hinzugefügt?) zurück."""
+    """Neue (oder per E-Mail gefundene) Person direkt zur Gruppe hinzufügen.
+    Gibt (neu angelegt?, zur Gruppe hinzugefügt?) zurück."""
     person_id, created = add_person(conn, name, email)
     return created, bool(add_members(conn, gid, [person_id]))
 
 
 def import_persons(conn, people, gids):
     """people: Liste von (name, email). Legt neue Personen an (vorhandene E-Mails und Doppelte
-    werden übersprungen) und fügt alle Zeilen den Runden gids hinzu.
-    Gibt (neu, übersprungen, Runden-Zuordnungen) zurück."""
+    werden übersprungen) und fügt alle Zeilen den Gruppen gids hinzu.
+    Gibt (neu, übersprungen, Gruppen-Zuordnungen) zurück."""
     created = assigned = 0
     for name, email in people:
         person_id, new = add_person(conn, name, email)
@@ -340,7 +340,7 @@ def import_persons(conn, people, gids):
 
 
 def delete_participant(conn, gid, pid):
-    """Entfernt die Person nur aus dieser Runde – in der Personenliste bleibt sie."""
+    """Entfernt die Person nur aus dieser Gruppe – in der Personenliste bleibt sie."""
     conn.execute("DELETE FROM participants WHERE id = ? AND group_id = ?", (pid, gid))
 
 
@@ -411,7 +411,7 @@ def save_draw(conn, gid, year, pairs):
 
 
 def load_draws(conn, gid, years):
-    """Entschlüsselt die Paare der angegebenen Jahre einer Runde."""
+    """Entschlüsselt die Paare der angegebenen Jahre einer Gruppe."""
     years = list(years)
     if not years:
         return set()
