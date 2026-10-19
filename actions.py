@@ -1,4 +1,6 @@
 """Auslosen und Versenden – genutzt von der Web-Oberfläche und vom Zeitplan."""
+import threading
+
 import mailer
 import storage
 from matching import NoMatchingPossible, draw
@@ -6,6 +8,10 @@ from matching import NoMatchingPossible, draw
 
 class ActionError(Exception):
     pass
+
+
+# Web-Threads und Zeitplan dürfen nicht gleichzeitig auslosen (z. B. Doppelklick)
+_draw_lock = threading.Lock()
 
 
 def compute_draw(conn, year):
@@ -29,6 +35,15 @@ def compute_draw(conn, year):
 
 def perform_draw(conn, year):
     """Lost aus, speichert verschlüsselt und verschickt die Zuteilungs-Mails."""
+    if not _draw_lock.acquire(blocking=False):
+        raise ActionError("Es läuft gerade schon eine Auslosung – bitte kurz warten.")
+    try:
+        return _perform_draw(conn, year)
+    finally:
+        _draw_lock.release()
+
+
+def _perform_draw(conn, year):
     if any(r["year"] == year for r in storage.draw_overview(conn)):
         raise ActionError(f"Für {year} gibt es bereits eine Auslosung. Erst löschen, dann neu auslosen.")
     result = compute_draw(conn, year)
