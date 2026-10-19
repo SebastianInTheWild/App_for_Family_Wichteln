@@ -36,6 +36,11 @@ def inject_globals():
         return {"dummy_mail": mailer.is_dummy(conn)}
 
 
+@app.route("/favicon.ico")
+def favicon():
+    return app.send_static_file("favicon.ico")
+
+
 # --- Teilnehmer --------------------------------------------------------------
 
 @app.route("/")
