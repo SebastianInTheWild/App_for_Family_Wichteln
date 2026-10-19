@@ -164,13 +164,23 @@ def _migrate(conn):
         subject, body = get_setting(conn, f"{kind}_subject"), get_setting(conn, f"{kind}_body")
         if subject is None:
             continue
-        if (subject, body) != OLD_DEFAULTS[kind]:
+        if (_norm(subject), _norm(body)) != OLD_DEFAULTS[kind]:
             if not conn.execute("SELECT 1 FROM templates").fetchone():
                 for k, items in default_templates.DEFAULTS.items():
                     for t in items:
                         add_template(conn, k, t["title"], t["subject"], t["body"])
             add_template(conn, kind, "Eigene Vorlage", subject, body)
         conn.execute("DELETE FROM settings WHERE key IN (?, ?)", (f"{kind}_subject", f"{kind}_body"))
+
+    # Bis 8fd362a wurden alte Standardtexte mit Windows-Zeilenumbrüchen fälschlich übernommen
+    for t in conn.execute("SELECT * FROM templates WHERE title = 'Eigene Vorlage'").fetchall():
+        if (_norm(t["subject"]), _norm(t["body"])) == OLD_DEFAULTS[t["kind"]]:
+            conn.execute("DELETE FROM templates WHERE id = ?", (t["id"],))
+
+
+def _norm(text):
+    """Browser schicken Textfelder mit \r\n – gespeichert wird einheitlich \n."""
+    return (text or "").replace("\r\n", "\n").replace("\r", "\n")
 
 
 # --- Schlüssel ---------------------------------------------------------------
@@ -299,12 +309,12 @@ def active_templates(conn, kind):
 def add_template(conn, kind, title, subject, body, active=True):
     return conn.execute("INSERT INTO templates (kind, title, subject, body, active) "
                         "VALUES (?, ?, ?, ?, ?)",
-                        (kind, title, subject, body, 1 if active else 0)).lastrowid
+                        (kind, title, _norm(subject), _norm(body), 1 if active else 0)).lastrowid
 
 
 def update_template(conn, tid, title, subject, body, active):
     conn.execute("UPDATE templates SET title = ?, subject = ?, body = ?, active = ? WHERE id = ?",
-                 (title, subject, body, 1 if active else 0, tid))
+                 (title, _norm(subject), _norm(body), 1 if active else 0, tid))
 
 
 def delete_template(conn, tid):
