@@ -26,7 +26,10 @@
     {% if has_password %}
     <label class="inline"><input type="checkbox" name="clear_password" value="1"> Gespeichertes Passwort löschen</label>
     {% endif %}
-    <label>Absender <input name="from" value="{{ cfg['from'] }}" placeholder="Wichteln &lt;wichteln@example.org&gt;"></label>
+    <div class="row">
+      <label>Absendername <input name="from_name" value="{{ cfg.from_name }}" placeholder="Weihnachts-Wichtel"></label>
+      <label>Absender-Adresse <input name="from" value="{{ cfg['from'] }}" placeholder="wichteln@example.org"></label>
+    </div>
     <div><button>Speichern</button></div>
   </form>
 </section>

@@ -3,6 +3,7 @@ Ohne SMTP-Server läuft der Dummy-Modus: Mails landen als .eml in data/outbox.""
 import datetime
 import smtplib
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 
 import storage
 
@@ -21,7 +22,7 @@ def render(template, **values):
 
 def smtp_config(conn):
     cfg = {key: storage.get_setting(conn, f"smtp_{key}") or ""
-           for key in ("host", "port", "security", "user", "from")}
+           for key in ("host", "port", "security", "user", "from", "from_name")}
     token = storage.get_setting(conn, "smtp_password_enc")
     cfg["password"] = storage.decrypt_text(token) if token else ""
     cfg["port"] = int(cfg["port"] or 587)
@@ -30,12 +31,19 @@ def smtp_config(conn):
 
 
 def save_smtp_config(conn, form):
-    for key in ("host", "port", "security", "user", "from"):
+    for key in ("host", "port", "security", "user", "from", "from_name"):
         storage.set_setting(conn, f"smtp_{key}", form.get(key, "").strip())
     if form.get("password"):
         storage.set_setting(conn, "smtp_password_enc", storage.encrypt_text(form["password"]))
     if form.get("clear_password"):
         storage.set_setting(conn, "smtp_password_enc", "")
+
+
+def sender_header(cfg):
+    """From-Kopfzeile: „Absendername <adresse>“. Ein Name im Adressfeld zählt nur ohne eigenes Namensfeld."""
+    name, address = parseaddr(cfg["from"])
+    address = address or (cfg["user"] if "@" in cfg["user"] else "") or "wichteln@example.org"
+    return formataddr((cfg.get("from_name") or name, address))
 
 
 def is_dummy(conn):
@@ -45,7 +53,7 @@ def is_dummy(conn):
 def send_all(conn, messages):
     """messages: Liste von (to, subject, body)."""
     cfg = smtp_config(conn)
-    sender = cfg["from"] or cfg["user"] or "wichteln@example.org"
+    sender = sender_header(cfg)
     mails = []
     for to, subject, body in messages:
         msg = EmailMessage()
