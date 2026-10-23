@@ -4,7 +4,8 @@
 
 <section class="card">
   <h3>SMTP-Server</h3>
-  <p class="muted">Leerer Server = Dummy-Modus (keine echten E-Mails). Das Passwort wird verschlüsselt gespeichert.</p>
+  <p class="muted">Leerer Server = Dummy-Modus (keine echten E-Mails). Das Passwort wird verschlüsselt gespeichert.
+    Leerer Benutzer = keine Anmeldung, z. B. für einen internen Relay wie <code>smtp-relay</code>, Port 587, Verschlüsselung „Keine“.</p>
   <form method="post" class="stack">
     <input type="hidden" name="action" value="save">
     <label>Server <input name="host" value="{{ cfg.host }}" placeholder="smtp.example.org"></label>
@@ -18,8 +19,9 @@
         </select>
       </label>
     </div>
-    <label>Benutzer <input name="user" value="{{ cfg.user }}" autocomplete="off"></label>
-    <label>Passwort
+    <label>Benutzer <span class="muted">(optional)</span>
+      <input name="user" value="{{ cfg.user }}" autocomplete="off" placeholder="leer = ohne Anmeldung"></label>
+    <label>Passwort <span class="muted">(nur mit Benutzer)</span>
       <input name="password" type="password" autocomplete="new-password"
              placeholder="{{ '•••••••• (gespeichert – leer lassen zum Behalten)' if has_password else '' }}">
     </label>

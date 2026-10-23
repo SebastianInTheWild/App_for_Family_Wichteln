@@ -121,10 +121,24 @@ def send_all(conn, messages):
         with smtp_cls(cfg["host"], cfg["port"], timeout=SMTP_TIMEOUT) as smtp:
             if cfg["security"] == "starttls":
                 smtp.starttls()
+            # Ohne Benutzer keine Anmeldung (interner Relay, der nach IP freigibt)
             if cfg["user"]:
                 smtp.login(cfg["user"], cfg["password"])
             for msg in mails:
                 smtp.send_message(msg)
+    except smtplib.SMTPNotSupportedError as e:
+        raise MailError(f"Der Mailserver {cfg['host']}:{cfg['port']} unterstützt das nicht ({e}). "
+                        "Ohne STARTTLS-Angebot (z. B. interner Relay) Verschlüsselung „Keine“ wählen; "
+                        "ohne Anmeldung den Benutzer leer lassen.") from e
+    except (smtplib.SMTPRecipientsRefused, smtplib.SMTPSenderRefused) as e:
+        refused = (e.recipients.values() if isinstance(e, smtplib.SMTPRecipientsRefused)
+                   else [(e.smtp_code, e.smtp_error)])
+        detail = "; ".join(f"{code} {msg.decode(errors='replace') if isinstance(msg, bytes) else msg}"
+                           for code, msg in refused)
+        hint = ("Der Server verlangt evtl. eine Anmeldung – Benutzer/Passwort eintragen, "
+                "oder der Relay lässt diese App/Absender-Domain nicht zu.") if not cfg["user"] \
+            else "Absender-Adresse und Freigaben beim Mailserver prüfen."
+        raise MailError(f"Mailserver hat die Mail abgelehnt: {detail}. {hint}") from e
     except (TimeoutError, smtplib.SMTPServerDisconnected) as e:
         raise MailError(f"Keine Antwort vom Mailserver {cfg['host']}:{cfg['port']} ({e}). "
                         "Passen Port und Verschlüsselung zusammen? "
